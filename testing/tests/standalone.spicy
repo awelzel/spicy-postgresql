@@ -1,0 +1,7 @@
+# @TEST-DOC: Test parsing behavior of PostgreSQL.
+#
+# @TEST-EXEC: spicyc ${DIST}/analyzer/postgresql.spicy -j -d -o postgresql.hlto
+#
+# TODO: Add/adapt standalone parsing tests here.
+# @TEST-EXEC: printf "test string" | spicy-dump -p PostgreSQL::Message postgresql.hlto >output 2>&1
+# @TEST-EXEC: TEST_DIFF_CANONIFIER= btest-diff output

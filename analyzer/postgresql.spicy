@@ -1,0 +1,7 @@
+# TODO: Define your analyzer here.
+
+module PostgreSQL;
+
+public type Message = unit {
+    payload: bytes &eod;
+};
