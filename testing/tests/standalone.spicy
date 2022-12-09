@@ -1,7 +1,8 @@
-# @TEST-DOC: Test parsing behavior of PostgreSQL.
+# @TEST-DOC: Test that we can compile standalone.
 #
 # @TEST-EXEC: spicyc ${DIST}/analyzer/postgresql.spicy -j -d -o postgresql.hlto
 #
-# TODO: Add/adapt standalone parsing tests here.
-# @TEST-EXEC: printf "test string" | spicy-dump -p PostgreSQL::Message postgresql.hlto >output 2>&1
-# @TEST-EXEC: TEST_DIFF_CANONIFIER= btest-diff output
+# XXX not testing...
+#
+# @XTEST-EXEC: printf "\x00\x00\x00\x08\x04\xd2\x16\x2f." | spicy-dump -p PostgreSQL::FrontendMessages postgresql.hlto >output 2>&1
+# @XTEST-EXEC: TEST_DIFF_CANONIFIER= btest-diff output

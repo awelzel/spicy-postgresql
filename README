@@ -1,4 +1,4 @@
 spicy-postgresql
-=================================
+================
 
-TODO: tell people what your package does!
+Spicy protocol parser for the PostgreSQL protocol.

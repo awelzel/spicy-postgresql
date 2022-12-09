@@ -1,0 +1,5 @@
+ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	version.major	version.minor	user	database	application_name	frontend	frontend_arg	backend	rows
+1670086966.135339	CHhAvVGS1DHFjwGM9	127.0.0.1	35336	127.0.0.1	5432	-	-	-	-	-	ssl_request	-	N	-
+1670086966.137236	CHhAvVGS1DHFjwGM9	127.0.0.1	35336	127.0.0.1	5432	3	0	zeek	zeek	psql	startup	{"application_name":"psql","database":"zeek","user":"zeek","client_encoding":"UTF8"}	-	-
+1670086966.159307	CHhAvVGS1DHFjwGM9	127.0.0.1	35336	127.0.0.1	5432	3	0	zeek	zeek	psql	simple_query	select now()	-	1
+1670086966.160775	CHhAvVGS1DHFjwGM9	127.0.0.1	35336	127.0.0.1	5432	3	0	zeek	zeek	psql	terminate	-	-	-

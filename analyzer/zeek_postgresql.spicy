@@ -6,15 +6,38 @@ module Zeek_PostgreSQL;
 import PostgreSQL;
 import zeek;
 
-# TODO: Protocol analyzers should confirm once they are reasonably sure that
-# they are indeed parsing the right protocol. Pick a unit that's a little bit
-# into the parsing process here.
-#
-# on PostgreSQL::SUITABLE_UNIT {
-#     zeek::confirm_protocol();
-# }
+# If we see a client StartupMessage, that's pretty good.
+on PostgreSQL::StartupMessage::%done {
+    zeek::confirm_protocol();
+}
 
-# Any error bubbling up to the top unit will trigger a protocol rejection.
-on PostgreSQL::Message::%error {
+# If the server replied with an ssl_byte and we let it through,
+# that's also pretty good.
+on PostgreSQL::MaybeBackendSSL::ssl_byte {
+    zeek::confirm_protocol();
+}
+
+on PostgreSQL::SSLSink::%init {
+  zeek::protocol_begin("SSL");
+}
+
+on PostgreSQL::SSLSink::chunk {
+  # print "ssl_chunk", zeek::is_orig(), self;
+  zeek::protocol_data_in(zeek::is_orig(), self.chunk);
+}
+
+on PostgreSQL::FrontendMessage::%error {
     zeek::reject_protocol("error while parsing PostgreSQL");
+}
+
+on PostgreSQL::BackendMessage::%error {
+    zeek::reject_protocol("error while parsing PostgreSQL");
+}
+
+public function convert_parameters_to_map(parameters: vector<PostgreSQL::Parameter>) : map<bytes, bytes> {
+    local t: map<bytes, bytes>;
+    for ( p in parameters )
+        t[p.name] = p.value;
+
+    return t;
 }

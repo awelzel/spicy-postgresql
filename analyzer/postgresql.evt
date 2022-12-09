@@ -1,17 +1,35 @@
 import PostgreSQL;
 import Zeek_PostgreSQL;
 
-# TODO: Adjust below how/when the analyzer will be activated. The example
-# defines a well-known port to trigger it. For more information, see:
-#
-#   https://docs.zeek.org/projects/spicy/en/latest/zeek.html#interface-definitions-evt-files
-#
-protocol analyzer spicy::PostgreSQL over TCP:
-    parse originator with PostgreSQL::Message,
-    parse responder with PostgreSQL::Message,
-    port 12345/tcp; # adapt port number in main.zeek accordingly
+protocol analyzer PostgreSQL over TCP:
+    parse originator with PostgreSQL::FrontendMessages,
+    parse responder with PostgreSQL::BackendMessages,
+    port 5432/tcp;
 
-# TODO: Connect Spicy-side events with Zeek-side events. The example just
-# defines a simple example event that forwards the raw data (which in practice
-# you don't want to do!).
-on PostgreSQL::Message -> event PostgreSQL::message($conn, $is_orig, self.payload);
+# Low level frontend/backend events.
+on PostgreSQL::NotImplemented -> event PostgreSQL::not_implemented($conn, $is_orig, self.typ, self.chunk);
+on PostgreSQL::BackendMessage -> event PostgreSQL::backend_message($conn, $is_orig);
+
+# Frontend events
+
+# Raised when the client sends a SSLRequest message.
+on PostgreSQL::SSLRequest -> event PostgreSQL::ssl_request($conn, $is_orig);
+
+# Reply from server about outcome of ssl. either "S" or "N" is expected
+on PostgreSQL::MaybeBackendSSL::ssl_byte -> event PostgreSQL::ssl_reply($conn, $is_orig, self.ssl_byte);
+
+on PostgreSQL::StartupMessage -> event PostgreSQL::startup_message(
+    $conn,
+    $is_orig,
+    tuple(self.version.major, self.version.minor),
+    Zeek_PostgreSQL::convert_parameters_to_map(self.parameters)
+);
+
+on PostgreSQL::Terminate -> event PostgreSQL::terminate($conn, $is_orig);
+
+on PostgreSQL::SimpleQuery -> event PostgreSQL::simple_query($conn, $is_orig, self.query);
+
+on PostgreSQL::ReadyForQuery -> event PostgreSQL::ready_for_query($conn, $is_orig, self.transaction_status);
+
+# TODO: Parses row...
+on PostgreSQL::DataRow -> event PostgreSQL::data_row($conn, $is_orig);
