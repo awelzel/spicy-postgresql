@@ -41,3 +41,39 @@ public function convert_parameters_to_map(parameters: vector<PostgreSQL::Paramet
 
     return t;
 }
+
+# For IdentifiedField
+public function convert_parameters_to_map(parameters: vector<PostgreSQL::IdentifiedField>) : map<bytes, bytes> {
+    local t: map<bytes, bytes>;
+    for ( p in parameters )
+        t[p.code] = p.value;
+
+    return t;
+}
+
+# For ParameterStatus
+public function convert_parameter_status_to_map(name: bytes, value: bytes) : map<bytes, bytes> {
+    local t: map<bytes, bytes>;
+    t[name] = value;
+    return t;
+}
+
+
+# For DescriptionField
+public function convert_fields_to_map(fields: vector<PostgreSQL::DescriptionField>) : map<bytes, uint32> {
+    local t: map<bytes, uint32>;
+    for ( f in fields )
+        t[f.name] = f.typ_oid;
+
+    return t;
+}
+
+# For Backend key data
+public function convert_key_data_to_map(pid: uint32, key: uint32) : map<uint32, uint32> {
+    local t: map<uint32, uint32>;
+    t[pid] = key;
+    return t;
+}
+
+
+

@@ -1,0 +1,26 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	postgresql
+#open	2023-09-21-16-53-01
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	version.major	version.minor	user	database	application_name	frontend	frontend_arg	backend	backend_arg	rows	column_num
+#types	time	string	addr	port	addr	port	count	count	string	string	string	string	string	string	string	count	count
+1670086898.642260	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	-	-	-	-	-	ssl_request	-	-	-	-	0
+1670086898.644262	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	-	-	-	-	-	Waiting response for SSLRequest 	-	N	-	-	0
+1670086898.644455	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	startup	{"application_name":"psql","user":"zeek","client_encoding":"UTF8","database":"zeek"}	-	-	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"application_name":"psql"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"client_encoding":"UTF8"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"DateStyle":"ISO, MDY"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"default_transaction_read_only":"off"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"in_hot_standby":"off"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"integer_datetimes":"on"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"IntervalStyle":"postgres"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"is_superuser":"on"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"server_encoding":"UTF8"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"server_version":"14.5 (Debian 14.5-1.pgdg110+1)"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"session_authorization":"zeek"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"standard_conforming_strings":"on"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Parameter status	{"TimeZone":"Etc/UTC"}	-	0
+1670086898.666237	ClDACS15EoqOkNtxp9	127.0.0.1	35304	127.0.0.1	5432	3	0	zeek	zeek	psql	-	-	Ready for query	-	0	0
+#close	2023-09-21-16-53-01
