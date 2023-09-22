@@ -11,6 +11,23 @@ export {
 		minor: count;
 	} &log;
 
+	type RowDataField: record {
+		col_len: count;
+		data: string;
+	} &log;
+	
+	# For Bind in extend query 
+	type ParamValue: record {
+    	length: count;
+    	data: string;
+	} &log;
+
+	# For error identifier
+	type IdentifiedField: record {
+		code: string;
+    	value: string;
+	} &log;
+
 	## Record type containing the column fields of the PostgreSQL log.
 	type Info: record {
 		## Timestamp for when the activity happened.
@@ -28,9 +45,11 @@ export {
 		frontend: string &optional &log;
 		frontend_arg: string &optional &log;
 		backend: string &optional &log;
-
+		backend_arg: string &optional &log;
 		# The number of rows returned or affectd.
 		rows: count &optional &log;
+		# number of colunm
+		column_num: count &optional &log;
 	};
 
 	type State: record {
@@ -40,6 +59,7 @@ export {
 		application_name: string &optional;
 		# How many data_rows have been received.
 		rows: count &default=0;
+		column_num: count &default=0;
 	};
 
 	## Default hook into PostgreSQL logging.
@@ -85,6 +105,9 @@ function emit_log(c: connection) {
 	if ( c$postgresql_state?$application_name )
 		c$postgresql$application_name = c$postgresql_state$application_name;
 
+	if (c$postgresql_state?$column_num)
+		c$postgresql$column_num = c$postgresql_state$column_num;	
+
 	Log::write(PostgreSQL::LOG, c$postgresql);
 	delete c$postgresql;
 }
@@ -93,6 +116,7 @@ event PostgreSQL::ssl_request(c: connection, is_orig: bool) {
 	hook set_session(c);
 
 	c$postgresql$frontend = "ssl_request";
+	emit_log(c);
 }
 
 # b: The S or N byte from the server
@@ -104,7 +128,7 @@ event PostgreSQL::ssl_reply(c: connection, is_orig: bool, b: string) {
 
 	# if ( b !in /S|N/ )
 	#	weird()
-
+	c$postgresql$frontend = "Waiting response for SSLRequest ";
 	c$postgresql$backend = b;
 	emit_log(c);
 }
@@ -116,7 +140,7 @@ event PostgreSQL::startup_message(
 	parameters: table[string] of string
 ) {
 	hook set_session(c);
-
+	
 	c$postgresql_state$version = version;
 	if ( "user" in parameters )
 		c$postgresql_state$user = parameters["user"];
@@ -134,6 +158,15 @@ event PostgreSQL::startup_message(
 	emit_log(c);
 }
 
+event PostgreSQL::parameter_status(c: connection, is_orig: bool, parameter: table[string] of string)
+	{
+		hook set_session(c);
+		c$postgresql$backend = "Parameter status";
+		c$postgresql$backend_arg = to_json(parameter);
+
+		emit_log(c);
+	}	
+
 event PostgreSQL::terminate(c: connection, is_orig: bool) {
 	hook set_session(c);
 	c$postgresql$frontend = "terminate";
@@ -147,23 +180,90 @@ event PostgreSQL::simple_query(c: connection, is_orig: bool, query: string) {
 	c$postgresql_state$rows = 0;
 }
 
-event PostgreSQL::data_row(c: connection, is_orig: bool) {
-	hook set_session(c);
-	++c$postgresql_state$rows;
-}
+event PostgreSQL::row_description(c: connection, is_orig: bool, column_num: count, fields: table[string] of count)
+	{	
+		hook set_session(c);
+		c$postgresql$backend = "Row description";
+		c$postgresql$backend_arg = to_json(fields);
+		c$postgresql_state$column_num = column_num;
+		emit_log(c);
+	}	
 
-event PostgreSQL::ready_for_query(c: connection, is_orig: bool, transaction_status: string) {
-	# Log a query (if there was one).
-	if ( ! c?$postgresql )
-		return;
+event PostgreSQL::data_row(c: connection, is_orig: bool, fields: vector of RowDataField)
+	{
+		hook set_session(c);
+		++c$postgresql_state$rows;
+		c$postgresql$backend = "Data row";
+		c$postgresql$backend_arg = to_json(fields);
+		emit_log(c);
+	}
 
-	# TODO: This filters out prepared statement queries.
-	if ( ! c$postgresql?$frontend || c$postgresql$frontend != "simple_query" )
-		return;
+event PostgreSQL::ready_for_query(c: connection, is_orig: bool, transaction_status: string) 
+	{
+		hook set_session(c);
+		if ( ! c?$postgresql )
+			return;
+		# TODO: This filters out prepared statement queries.
 
-	c$postgresql$rows = c$postgresql_state$rows;
-	emit_log(c);
-}
+		# FIXME:The value of the status seems not to be maintained. 
+		# FIXME:When it's "ready for query," the frontend status is always empty.
+		c$postgresql$rows = c$postgresql_state$rows;
+		c$postgresql_state$rows = 0;
+		c$postgresql_state$column_num = 0;
+		c$postgresql$backend = "Ready for query";
+		emit_log(c);
+	}
+
+event PostgreSQL::parse(c: connection, is_orig: bool, query: string, parameter_num: count)
+	{
+		hook set_session(c);
+		if (!c?$postgresql)
+			return;
+		c$postgresql$frontend = "Parse";
+		c$postgresql$frontend_arg = query;
+		emit_log(c);	
+	}	
+
+event PostgreSQL::bind(c: connection, is_orig: bool, param_values: vector of ParamValue)
+	{
+		hook set_session(c);
+		if (!c?$postgresql)
+			return;
+		c$postgresql$frontend = "Bind";
+		c$postgresql$frontend_arg = to_json(param_values);
+		emit_log(c);
+	}
+
+event PostgreSQL::execute(c: connection, is_orig: bool, portal: string, return_num: count)
+	{
+		hook set_session(c);
+
+		if(!c?$postgresql)
+			return;		
+		c$postgresql$frontend = "Execute";
+		c$postgresql$frontend_arg = portal;
+		emit_log(c);
+	}	
+
+event PostgreSQL::error(c: connection, is_orig: bool, fields: table[string] of string)
+	{
+		hook set_session(c);
+		
+		if(!c?$postgresql)
+			return;
+		c$postgresql$backend = "Error";
+		c$postgresql$backend_arg = to_json(fields);
+		emit_log(c);	
+	}
+
+event PostgreSQL::backend_key_data(c: connection, is_orig: bool, key_data: table[count] of count)
+	{
+		hook set_session(c);
+
+		c$postgresql$backend = "BackendKeyData";
+		c$postgresql$backend_arg = to_json(key_data);
+		emit_log(c);
+	}	
 
 event PostgreSQL::not_implemented(c: connection, is_orig: bool, typ: string, chunk: string) {
 	if ( log_not_implemented )

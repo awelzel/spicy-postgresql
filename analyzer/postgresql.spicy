@@ -159,6 +159,62 @@ type SimpleQuery = unit(length: uint32) {
   query: bytes &until=b"\x00" &size=length;
 };
 
+
+# Parse
+type TYPE_OID = unit {
+    typ_oids: uint32;
+};
+
+type Parse = unit(length: uint32) {
+    statement: bytes &until=b"\x00";
+    query: bytes &until=b"\x00";
+    parameter_num: uint16;
+    typ_oids: TYPE_OID[] &size=(self.parameter_num * 4);
+};
+
+# Bind
+type FormatCode = unit {
+    format: uint16;
+};
+
+type ParamValue = unit {
+    length: uint32;
+    data: bytes &size=(self.length);
+};
+
+type ResultFormat = unit {
+    format: uint16;
+};
+
+type Bind = unit(length: uint32) {
+    portal: bytes &until=b"\x00";
+    prepare_statement: bytes &until=b"\x00";
+    param_format_code_num: uint16;
+    format_codes: FormatCode[] &size=(self.param_format_code_num * 2);
+    param_value_num: uint16;
+    param_values : ParamValue[self.param_value_num];
+    result_format_num: uint16;
+    result_formats: ResultFormat[] &size=(self.result_format_num * 2);
+};
+
+# Describe
+type Describe = unit(length: uint32) {
+    # 'S' Or 'P'
+    typ: bytes &size=1;
+    switch (self.typ) {
+        b"P" -> portal:                 bytes &until=b"\x00";
+        b"S" -> prepare_statement:      bytes &until=b"\x00";
+    };
+
+};
+
+# Execute
+type Execute = unit(length: uint32) {
+    portal bytes &until=b"\x00";
+    # zero denotes “no limit”.
+    return_num: uint32;
+};
+
 # The client has requested SSL, the server either confirms (S) or
 # stays in plaintext (N) mode. Depending on the result, we connect
 # our sink to the SSL sink, or to a PlainBackendMessages unit.
@@ -254,9 +310,6 @@ type BackendMessage = unit {
     *    -> not_implemented:  NotImplemented(self.typ, self.length-4);
   } &size=self.length-4;
 
-  # on %done()  {
-  #  print "BackendMessage%done", self;
-  # }
 };
 
 type ParameterStatus = unit(length: uint32) {
@@ -264,22 +317,42 @@ type ParameterStatus = unit(length: uint32) {
   value: bytes &until=b"\x00";
 };
 
-# TODO: Just consumes all the bytes currently instead of parsing out details.
+type DescriptionField = unit {
+    name: bytes &until=b"\x00";
+    tab_oid: uint32;
+    col_idx: uint16;
+    typ_oid: uint32;
+    col_len: uint16;
+    typ_mdf: uint32;
+    format: uint16;
+};
+
 type RowDescription = unit(length: uint32) {
-  not_implemented: bytes &size=length;
+    # not_implemented: bytes &size=length;
+    count: uint16;
+    fields: DescriptionField[] &size=length-2;
 };
 
-# Possible values are 'I' if idle (not in a transaction block);
-# 'T' if in a transaction block; or 'E' if in a failed transaction block
-# (queries will be rejected until block is ended).
-type ReadyForQuery = unit(length: uint32) {
-  transaction_status: bytes &size=1;
+type DataRowField = unit {
+    col_len: uint32{
+        if ($$ == 0xffffffff) {
+            self.col_len = 0;
+        }
+    }
+    data: bytes &size=self.col_len;
 };
 
-
-# Just for counting right now.
 type DataRow = unit(length: uint32) {
-  todo: bytes &size=length;
+    count: uint16;
+    fields: DataRowField[] &size=length-2;
+};
+
+# Possible values are 'I' if idle(not in a transaction block);
+# 'T' if in a transaction block;
+# 'E' if in a failed transaction block
+# TODO(optional): Complete for I/T/E type
+type ReadyForQuery = unit(length: uint32) {
+    transaction_status: bytes &size=1;
 };
 
 # Fields with a 1 byte field as documented here:
@@ -301,6 +374,7 @@ type Authentication = unit(length: uint32) {
   switch ( self.identifier ) {
     10     -> sasl:            AuthenticationSASL(length - 4) &size=(length-4);
     11, 12 -> sasl_bytes:      bytes &size=(length - 4);
+    0      -> auth_ok:         bytes &size=0;
     *      -> not_implemented: bytes &size=(length - 4);
   };
 };
