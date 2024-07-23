@@ -24,7 +24,7 @@ type SSLSink = unit {
 type State = tuple<
   ssl_frontend_state: SSLFrontendState,
   ssl_backend_state: SSLBackendState,
-  ssl_sink: sink,
+  ssl_sink: sink&,
   ssl_sink_connected: bool,
 >;
 
@@ -142,7 +142,7 @@ type PlainFrontendMessages = unit {
 };
 
 type FrontendMessage = unit {
-  typ     bytes &size=1;
+  typ:    bytes &size=1;
   length: uint32 &requires=(self.length >= 4);
 
   switch ( self.typ ) {
@@ -163,7 +163,7 @@ type SimpleQuery = unit(length: uint32) {
 # stays in plaintext (N) mode. Depending on the result, we connect
 # our sink to the SSL sink, or to a PlainBackendMessages unit.
 #
-type MaybeBackendSSL = unit(inout ctx: State&) {
+type MaybeBackendSSL = unit(ctx: State&) {
 
   # Connected SSL, or plaintext.
   sink s1;
@@ -240,7 +240,7 @@ type PlainBackendMessages = unit {
 };
 
 type BackendMessage = unit {
-  typ     bytes &size=1;
+  typ:    bytes &size=1;
   length: uint32 &requires=(self.length >= 4);
 
   switch ( self.typ ) {
