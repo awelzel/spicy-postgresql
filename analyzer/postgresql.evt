@@ -25,11 +25,38 @@ on PostgreSQL::StartupMessage -> event PostgreSQL::startup_message(
     Zeek_PostgreSQL::convert_parameters_to_map(self.parameters)
 );
 
+on PostgreSQL::ParameterStatus -> event PostgreSQL::parameter_status(
+    $conn, 
+    $is_orig,
+    Zeek_PostgreSQL::convert_parameter_status_to_map(self.name, self.value)
+);
+
 on PostgreSQL::Terminate -> event PostgreSQL::terminate($conn, $is_orig);
 
 on PostgreSQL::SimpleQuery -> event PostgreSQL::simple_query($conn, $is_orig, self.query);
 
+on PostgreSQL::Parse -> event PostgreSQL::parse($conn, $is_orig, self.query, self.parameter_num);
+on PostgreSQL::Bind -> event PostgreSQL::bind($conn, $is_orig, self.param_values);
+on PostgreSQL::Execute -> event PostgreSQL::execute($conn, $is_orig, self.portal, self.return_num);
+
 on PostgreSQL::ReadyForQuery -> event PostgreSQL::ready_for_query($conn, $is_orig, self.transaction_status);
 
-# TODO: Parses row...
-on PostgreSQL::DataRow -> event PostgreSQL::data_row($conn, $is_orig);
+on PostgreSQL::ErrorResponse -> event PostgreSQL::error(
+    $conn, 
+    $is_orig, 
+    Zeek_PostgreSQL::convert_parameters_to_map(self.fields)
+);
+
+on PostgreSQL::BackendKeyData -> event PostgreSQL::backend_key_data(
+    $conn, 
+    $is_orig,
+    Zeek_PostgreSQL::convert_key_data_to_map(self.process_id, self.secret_key)
+);
+
+on PostgreSQL::RowDescription -> event PostgreSQL::row_description(
+    $conn, 
+    $is_orig,
+    self.count, 
+    Zeek_PostgreSQL::convert_fields_to_map(self.fields)
+);
+on PostgreSQL::DataRow -> event PostgreSQL::data_row($conn, $is_orig, self.fields);
