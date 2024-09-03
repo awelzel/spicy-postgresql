@@ -110,6 +110,15 @@ global PostgreSQL::data_row: event(c: connection, column_values: count);
 ##
 global PostgreSQL::parameter_status: event(c: connection, name: string, value: string);
 
+## Generated for a BackendKeyData message for cancellation.
+##
+## c: The connection.
+##
+## process_id: The process ID of the backend.
+##
+## secret_key: The secret key of the backend.
+global PostgreSQL::backend_key_data: event(c: connection, process_id: count, secret_key: count);
+
 ## Event generated For a frontend Terminate message.
 ##
 ## c: The connection.

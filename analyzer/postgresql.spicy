@@ -255,7 +255,6 @@ type BackendMessage = unit {
         'E' -> error: ErrorResponse(self.length - 4);
         'R' -> auth: AuthenticationRequest(self.length - 4);
         'S' -> parameter_status: ParameterStatus(self.length - 4);
-        'T' -> row_description: RowDescription(self.length - 4);
         'D' -> data_row: DataRow(self.length - 4);
         'Z' -> ready_for_query: ReadyForQuery(self.length - 4);
         * -> not_implemented: NotImplemented(self.typ, self.length - 4);
@@ -265,11 +264,6 @@ type BackendMessage = unit {
 type ParameterStatus = unit(length: uint32) {
     name: bytes &until=b"\x00";
     value: bytes &until=b"\x00";
-};
-
-# TODO: Just consumes all the bytes currently instead of parsing out details.
-type RowDescription = unit(length: uint32) {
-    not_implemented: bytes &size=length;
 };
 
 # Possible values are 'I' if idle (not in a transaction block);

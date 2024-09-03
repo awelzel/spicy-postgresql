@@ -34,3 +34,5 @@ on PostgreSQL::Terminate -> event PostgreSQL::terminate($conn);
 on PostgreSQL::DataRow -> event PostgreSQL::data_row($conn, self.column_values);
 
 on PostgreSQL::ParameterStatus -> event PostgreSQL::parameter_status($conn, self.name, self.value);
+
+on PostgreSQL::BackendKeyData -> event PostgreSQL::backend_key_data($conn, self.process_id, self.secret_key);

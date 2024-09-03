@@ -126,6 +126,11 @@ XXXXXXXXXX.XXXXXX PostgreSQL::parameter_status
                   [1] name: string       = TimeZone
                   [2] value: string      = Etc/UTC
 
+XXXXXXXXXX.XXXXXX PostgreSQL::backend_key_data
+                  [0] c: connection      = [id=[orig_h=127.0.0.1, orig_p=35336/tcp, resp_h=127.0.0.1, resp_p=5432/tcp], orig=[size=248, state=4, num_pkts=9, num_bytes_ip=724, flow_label=0, l2_addr=<uninitialized>], resp=[size=583, state=4, num_pkts=8, num_bytes_ip=542, flow_label=0, l2_addr=<uninitialized>], start_time=XXXXXXXXXX.XXXXXX, duration=24.0 msecs 738.073349 usecs, service={\x0aPOSTGRESQL\x0a}, history=ShADad, uid=CHhAvVGS1DHFjwGM9, tunnel=<uninitialized>, vlan=<uninitialized>, inner_vlan=<uninitialized>, dpd=<uninitialized>, dpd_state=<uninitialized>, service_violation={\x0a\x0a}]
+                  [1] process_id: count  = 96
+                  [2] secret_key: count  = 590994220
+
 XXXXXXXXXX.XXXXXX PostgreSQL::ready_for_query
                   [0] c: connection      = [id=[orig_h=127.0.0.1, orig_p=35336/tcp, resp_h=127.0.0.1, resp_p=5432/tcp], orig=[size=248, state=4, num_pkts=9, num_bytes_ip=724, flow_label=0, l2_addr=<uninitialized>], resp=[size=583, state=4, num_pkts=8, num_bytes_ip=542, flow_label=0, l2_addr=<uninitialized>], start_time=XXXXXXXXXX.XXXXXX, duration=24.0 msecs 738.073349 usecs, service={\x0aPOSTGRESQL\x0a}, history=ShADad, uid=CHhAvVGS1DHFjwGM9, tunnel=<uninitialized>, vlan=<uninitialized>, inner_vlan=<uninitialized>, dpd=<uninitialized>, dpd_state=<uninitialized>, service_violation={\x0a\x0a}]
                   [1] transaction_status: string = I
@@ -133,6 +138,12 @@ XXXXXXXXXX.XXXXXX PostgreSQL::ready_for_query
 XXXXXXXXXX.XXXXXX PostgreSQL::simple_query
                   [0] c: connection      = [id=[orig_h=127.0.0.1, orig_p=35336/tcp, resp_h=127.0.0.1, resp_p=5432/tcp], orig=[size=266, state=4, num_pkts=10, num_bytes_ip=776, flow_label=0, l2_addr=<uninitialized>], resp=[size=583, state=4, num_pkts=9, num_bytes_ip=1059, flow_label=0, l2_addr=<uninitialized>], start_time=XXXXXXXXXX.XXXXXX, duration=25.0 msecs 581.121445 usecs, service={\x0aPOSTGRESQL\x0a}, history=ShADad, uid=CHhAvVGS1DHFjwGM9, tunnel=<uninitialized>, vlan=<uninitialized>, inner_vlan=<uninitialized>, dpd=<uninitialized>, dpd_state=<uninitialized>, service_violation={\x0a\x0a}]
                   [1] query: string      = select now()
+
+XXXXXXXXXX.XXXXXX PostgreSQL::not_implemented
+                  [0] c: connection      = [id=[orig_h=127.0.0.1, orig_p=35336/tcp, resp_h=127.0.0.1, resp_p=5432/tcp], orig=[size=266, state=4, num_pkts=11, num_bytes_ip=846, flow_label=0, l2_addr=<uninitialized>], resp=[size=672, state=4, num_pkts=10, num_bytes_ip=1111, flow_label=0, l2_addr=<uninitialized>], start_time=XXXXXXXXXX.XXXXXX, duration=26.0 msecs 796.102524 usecs, service={\x0aPOSTGRESQL\x0a}, history=ShADad, uid=CHhAvVGS1DHFjwGM9, tunnel=<uninitialized>, vlan=<uninitialized>, inner_vlan=<uninitialized>, dpd=<uninitialized>, dpd_state=<uninitialized>, service_violation={\x0a\x0a}]
+                  [1] is_orig: bool      = F
+                  [2] typ: string        = T
+                  [3] chunk: string      = \x00\x01now\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\xa0\x00\x08\xff\xff\xff\xff\x00\x00
 
 XXXXXXXXXX.XXXXXX PostgreSQL::data_row
                   [0] c: connection      = [id=[orig_h=127.0.0.1, orig_p=35336/tcp, resp_h=127.0.0.1, resp_p=5432/tcp], orig=[size=266, state=4, num_pkts=11, num_bytes_ip=846, flow_label=0, l2_addr=<uninitialized>], resp=[size=672, state=4, num_pkts=10, num_bytes_ip=1111, flow_label=0, l2_addr=<uninitialized>], start_time=XXXXXXXXXX.XXXXXX, duration=26.0 msecs 796.102524 usecs, service={\x0aPOSTGRESQL\x0a}, history=ShADad, uid=CHhAvVGS1DHFjwGM9, tunnel=<uninitialized>, vlan=<uninitialized>, inner_vlan=<uninitialized>, dpd=<uninitialized>, dpd_state=<uninitialized>, service_violation={\x0a\x0a}]
