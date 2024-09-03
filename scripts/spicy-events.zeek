@@ -75,6 +75,23 @@ global PostgreSQL::ready_for_query: event(c: connection, transaction_status: str
 ## query: The query string.
 global PostgreSQL::simple_query: event(c: connection, query: string);
 
+## Event generated for identified field within an ErrorResponse.
+##
+## c: The connection.
+##
+## code: The code (https://www.postgresql.org/docs/current/protocol-error-fields.html)
+##
+## value: The field value.
+##
+## .. zeek:see:: PostgreSQL::error_response
+global PostgreSQL::error_response_identified_field: event(c: connection, code: string, value: string);
+
+## Event generated for a ErrorResponse.
+##
+## c: The connection.
+##
+## .. zeek:see:: PostgreSQL::error_response_identified_field
+global PostgreSQL::error_response: event(c: connection);
 
 ## Event generated for every backend DataRow message.
 ##
@@ -98,5 +115,5 @@ global PostgreSQL::parameter_status: event(c: connection, name: string, value: s
 ## c: The connection.
 global PostgreSQL::terminate: event(c: connection);
 
-## Testing event generated for messages not implemented.
+## Event generated for not implemented messages.
 global PostgreSQL::not_implemented: event(c: connection, is_orig: bool, typ: string, chunk: string);

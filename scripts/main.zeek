@@ -1,14 +1,13 @@
 @load base/protocols/conn/removal-hooks
 
 @load ./spicy-events
+@load ./consts
 
 module PostgreSQL;
 
 export {
 	## Log stream identifier.
 	redef enum Log::ID += { LOG };
-
-	option log_not_implemented = F;
 
 	type Version: record {
 		major: count;
@@ -24,7 +23,6 @@ export {
 		## The connection's 4-tuple of endpoint addresses/ports.
 		id: conn_id &log;
 
-		version: Version &optional &log;
 		user: string &optional &log;
 		database: string &optional &log;
 		application_name: string &optional &log;
@@ -32,6 +30,10 @@ export {
 		frontend: string &optional &log;
 		frontend_arg: string &optional &log;
 		backend: string &optional &log;
+		backend_arg: string &optional &log;
+
+		# Whether the login/query was successful.
+		success: bool &optional &log;
 
 		# The number of rows returned or affectd.
 		rows: count &optional &log;
@@ -44,6 +46,7 @@ export {
 		application_name: string &optional;
 		# How many data_rows have been received.
 		rows: count &default=0;
+		errors: vector of string;
 	};
 
 	## Default hook into PostgreSQL logging.
@@ -83,9 +86,6 @@ function emit_log(c: connection) {
 	if ( ! c?$postgresql )
 		return;
 
-	if ( c$postgresql_state?$version )
-		c$postgresql$version = c$postgresql_state$version;
-
 	if ( c$postgresql_state?$user )
 		c$postgresql$user = c$postgresql_state$user;
 
@@ -105,17 +105,11 @@ event PostgreSQL::ssl_request(c: connection) {
 	c$postgresql$frontend = "ssl_request";
 }
 
-# b: The S or N byte from the server
 event PostgreSQL::ssl_reply(c: connection, b: string) {
 	hook set_session(c);
 
-	# if ( c$postgresql$message != "ssl_request" ):
-	#	weird();
-
-	# if ( b !in /S|N/ )
-	#	weird()
-
 	c$postgresql$backend = b;
+	c$postgresql$success = b == "S";
 	emit_log(c);
 }
 
@@ -136,17 +130,72 @@ event PostgreSQL::startup_message(c: connection, major: count, minor: count) {
 
 	c$postgresql_state$version = Version($major=major, $minor=minor);
 	c$postgresql$frontend = "startup";
+}
+
+event PostgreSQL::error_response_identified_field(c: connection, code: string, value: string) {
+	hook set_session(c);
+
+	local errors = c$postgresql_state$errors;
+	errors += fmt("%s=%s", error_ids[code], value);
+}
+
+event PostgreSQL::error_response(c: connection) {
+	hook set_session(c);
+
+	if ( c$postgresql?$backend )
+		c$postgresql$backend += ",error";
+	else
+		c$postgresql$backend = "error";
+
+	local errors = join_string_vec(c$postgresql_state$errors, ",");
+	if ( c$postgresql?$backend_arg )
+		c$postgresql$backend_arg += "," + errors;
+	else
+		c$postgresql$backend_arg = errors;
+
+	c$postgresql$success = F;
+
+	emit_log(c);
+}
+
+event PostgreSQL::authentication_request(c: connection, identifier: count, data: string) {
+	hook set_session(c);
+
+	if ( c$postgresql?$backend && ! ends_with(c$postgresql$backend, "auth") )
+		c$postgresql$backend += ",auth_request";
+	else
+		c$postgresql$backend = "auth_request";
+
+	if ( c$postgresql?$backend_arg )
+		c$postgresql$backend_arg += "," + auth_ids[identifier];
+	else
+		c$postgresql$backend_arg = auth_ids[identifier];
+}
+
+event PostgreSQL::authentication_ok(c: connection) {
+	hook set_session(c);
+
+	c$postgresql$backend = "auth_ok";
+	c$postgresql$success = T;
+
 	emit_log(c);
 }
 
 event PostgreSQL::terminate(c: connection) {
+	if ( c?$postgresql )
+		emit_log(c);
+
 	hook set_session(c);
 	c$postgresql$frontend = "terminate";
 	emit_log(c);
 }
 
 event PostgreSQL::simple_query(c: connection, query: string) {
+	if ( c?$postgresql )
+		emit_log(c);
+
 	hook set_session(c);
+
 	c$postgresql$frontend = "simple_query";
 	c$postgresql$frontend_arg = query;
 	c$postgresql_state$rows = 0;
@@ -154,6 +203,7 @@ event PostgreSQL::simple_query(c: connection, query: string) {
 
 event PostgreSQL::data_row(c: connection, column_values: count) {
 	hook set_session(c);
+
 	++c$postgresql_state$rows;
 }
 
@@ -162,17 +212,12 @@ event PostgreSQL::ready_for_query(c: connection, transaction_status: string) {
 	if ( ! c?$postgresql )
 		return;
 
-	# TODO: This filters out prepared statement queries.
-	if ( ! c$postgresql?$frontend || c$postgresql$frontend != "simple_query" )
-		return;
+	# If no one said otherwise, the last action was successful.
+	if ( ! c$postgresql?$success )
+		c$postgresql$success = transaction_status == "I" || transaction_status == "T";
 
 	c$postgresql$rows = c$postgresql_state$rows;
 	emit_log(c);
-}
-
-event PostgreSQL::not_implemented(c: connection, is_orig: bool, typ: string, chunk: string) {
-	if ( log_not_implemented )
-		Reporter::warning(fmt("PostgreSQL: not_implemented %s: %s (%s is_orig=%s)", typ, to_json(chunk), c$id, is_orig));
 }
 
 hook finalize_postgresql(c: connection) &priority=-5 {

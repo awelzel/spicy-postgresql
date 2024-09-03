@@ -1,4 +1,4 @@
-# @TEST-DOC: Test that dump events works out
+# @TEST-DOC: Test that misc/dump-events works right just with spicy-events.zeek
 #
 # @TEST-EXEC: zeek -b -Cr ${TRACES}/psql-select-now.pcap ${PACKAGE}/spicy-events.zeek %INPUT >output
 #

@@ -144,13 +144,13 @@ type PlainFrontendMessages = unit {
 };
 
 type FrontendMessage = unit {
-    typ: bytes &size=1;
+    typ: uint8;
     length: uint32 &requires=(self.length >= 4);
 
     switch (self.typ) {
-        b"p" -> : AuthenticationResponse(self.length - 4) &size=self.length - 4;
-        b"X" -> : Terminate(self.length - 4) &size=self.length - 4;
-        b"Q" -> simple_query: SimpleQuery(self.length - 4) &size=self.length - 4;
+        'p' -> : AuthenticationResponse(self.length - 4) &size=self.length - 4;
+        'X' -> : Terminate(self.length - 4) &size=self.length - 4;
+        'Q' -> simple_query: SimpleQuery(self.length - 4) &size=self.length - 4;
         * -> not_implemented: NotImplemented(self.typ, self.length - 4) &size=self.length - 4;
     };
 };
@@ -247,23 +247,19 @@ type PlainBackendMessages = unit {
 };
 
 type BackendMessage = unit {
-    typ: bytes &size=1;
+    typ: uint8 &size=1;
     length: uint32 &requires=(self.length >= 4);
 
     switch (self.typ) {
-        b"K" -> backend_key_data: BackendKeyData(self.length - 4);
-        b"E" -> error: ErrorResponse(self.length - 4);
-        b"R" -> auth: AuthenticationRequest(self.length - 4);
-        b"S" -> parameter_status: ParameterStatus(self.length - 4);
-        b"T" -> row_description: RowDescription(self.length - 4);
-        b"D" -> data_row: DataRow(self.length - 4);
-        b"Z" -> ready_for_query: ReadyForQuery(self.length - 4);
+        'K' -> backend_key_data: BackendKeyData(self.length - 4);
+        'E' -> error: ErrorResponse(self.length - 4);
+        'R' -> auth: AuthenticationRequest(self.length - 4);
+        'S' -> parameter_status: ParameterStatus(self.length - 4);
+        'T' -> row_description: RowDescription(self.length - 4);
+        'D' -> data_row: DataRow(self.length - 4);
+        'Z' -> ready_for_query: ReadyForQuery(self.length - 4);
         * -> not_implemented: NotImplemented(self.typ, self.length - 4);
     } &size=self.length - 4;
-
-    # on %done()  {
-    #  print "BackendMessage%done", self;
-    # }
 };
 
 type ParameterStatus = unit(length: uint32) {
@@ -295,13 +291,13 @@ type DataRow = unit(length: uint32) {
 # Fields with a 1 byte field as documented here:
 # https://www.postgresql.org/docs/current/protocol-error-fields.html
 # TODO: Parse it out nicely or leave that up to script-land?
-type IdentifiedField = unit {
-    code: bytes &size=1; # looks better than uint8
+type ErrorIdentifiedField = unit {
+    code: uint8;
     value: bytes &until=b"\x00";
 };
 
 type ErrorResponse = unit(length: uint32) {
-    fields: IdentifiedField[] &size=(length - 1);
+    : ErrorIdentifiedField[] &size=(length - 1);
     : b"\x00";
 };
 
@@ -324,9 +320,6 @@ type BackendKeyData = unit(length: uint32) {
     secret_key: uint32;
 };
 
-type NotImplemented = unit(typ: bytes, length: uint32) {
-    chunk: bytes &size=length {
-        self.typ = typ;
-    }
-    var typ: bytes;
+type NotImplemented = unit(typ: uint8, length: uint32) {
+    chunk: bytes &size=length;
 };
