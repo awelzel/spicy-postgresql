@@ -17,8 +17,8 @@ type SSLBackendState = enum {
 };
 
 # When a connection switches to SSL, this consumes all the SSL chunks.
-# In zeek_postgres.spicy this calls zeek::protocol_begin() and then
-# zeek::protocol_data_in()
+# In zeek_postgres.spicy, SSLSink%init calls zeek::protocol_begin() and
+# then zeek::protocol_data_in()
 #
 # There's a single SSLSink shared between backend and frontend.
 type SSLSink = unit {
@@ -148,10 +148,17 @@ type FrontendMessage = unit {
     length: uint32 &requires=(self.length >= 4);
 
     switch (self.typ) {
+        b"p" -> : AuthenticationResponse(self.length - 4) &size=self.length - 4;
         b"X" -> : Terminate(self.length - 4) &size=self.length - 4;
         b"Q" -> simple_query: SimpleQuery(self.length - 4) &size=self.length - 4;
         * -> not_implemented: NotImplemented(self.typ, self.length - 4) &size=self.length - 4;
     };
+};
+
+type AuthenticationResponse = unit(length: uint32) {
+    # This is PasswordMessage, SASLInitialMessage, etc. based on context.
+    # For now, just thread it through.
+    data: bytes &eod;
 };
 
 type Terminate = unit(length: uint32) {};
@@ -244,9 +251,9 @@ type BackendMessage = unit {
     length: uint32 &requires=(self.length >= 4);
 
     switch (self.typ) {
-        b"B" -> backend_key_data: BackendKeyData(self.length - 4);
+        b"K" -> backend_key_data: BackendKeyData(self.length - 4);
         b"E" -> error: ErrorResponse(self.length - 4);
-        b"R" -> auth: Authentication(self.length - 4);
+        b"R" -> auth: AuthenticationRequest(self.length - 4);
         b"S" -> parameter_status: ParameterStatus(self.length - 4);
         b"T" -> row_description: RowDescription(self.length - 4);
         b"D" -> data_row: DataRow(self.length - 4);
@@ -273,12 +280,16 @@ type RowDescription = unit(length: uint32) {
 # 'T' if in a transaction block; or 'E' if in a failed transaction block
 # (queries will be rejected until block is ended).
 type ReadyForQuery = unit(length: uint32) {
-    transaction_status: bytes &size=1;
+    var transaction_status: string;
+    status: uint8 &requires=($$ == 'I' || $$ == 'T' || $$ == 'E') {
+        self.transaction_status = ("%c" % $$);
+    }
 };
 
 # Just for counting right now.
 type DataRow = unit(length: uint32) {
-    todo: bytes &size=length;
+    column_values: uint16;
+    todo: skip bytes &size=length - 2;
 };
 
 # Fields with a 1 byte field as documented here:
@@ -294,24 +305,18 @@ type ErrorResponse = unit(length: uint32) {
     : b"\x00";
 };
 
-# TODO (although it's unclear if we want to parse SASL all that much...)
-type Authentication = unit(length: uint32) {
-    identifier: uint32;
-    switch (self.identifier) {
-        10 -> sasl: AuthenticationSASL(length - 4) &size=(length - 4);
-        11,
-        12 -> sasl_bytes: bytes &size=(length - 4);
-        * -> not_implemented: bytes &size=(length - 4);
-    };
-};
+type AuthenticationRequest = unit(length: uint32) {
+    identifier: uint32 &requires=($$ <= 12) {
+        if (self.identifier == 0) {
+            if (length != 4) {
+                throw "AuthenticationOK with wrong length: %s" % length;
+            }
+        }
+    }
 
-type SASLMechanism = unit {
-    name: bytes &until=b"\x00";
-};
-
-type AuthenticationSASL = unit(length: uint32) {
-    mechanisms: SASLMechanism[] &size=(length - 1);
-    : b"\x00";
+    # There's more structure (GSS-API, SASL, cleartext), but for now
+    # just thread through the raw data.
+    data: bytes &eod;
 };
 
 type BackendKeyData = unit(length: uint32) {

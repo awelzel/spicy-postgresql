@@ -1,3 +1,7 @@
+@load base/protocols/conn/removal-hooks
+
+@load ./spicy-events
+
 module PostgreSQL;
 
 export {
@@ -34,7 +38,7 @@ export {
 	};
 
 	type State: record {
-		version: Version &optional &log;
+		version: Version &optional;
 		user: string &optional;
 		database: string &optional;
 		application_name: string &optional;
@@ -93,14 +97,14 @@ function emit_log(c: connection) {
 	delete c$postgresql;
 }
 
-event PostgreSQL::ssl_request(c: connection, is_orig: bool) {
+event PostgreSQL::ssl_request(c: connection) {
 	hook set_session(c);
 
 	c$postgresql$frontend = "ssl_request";
 }
 
 # b: The S or N byte from the server
-event PostgreSQL::ssl_reply(c: connection, is_orig: bool, b: string) {
+event PostgreSQL::ssl_reply(c: connection, b: string) {
 	hook set_session(c);
 
 	# if ( c$postgresql$message != "ssl_request" ):
@@ -125,33 +129,33 @@ event PostgreSQL::startup_parameter(c: connection, name: string, value: string) 
 	}
 }
 
-event PostgreSQL::startup_message(c: connection, version: Version) {
+event PostgreSQL::startup_message(c: connection, major: count, minor: count) {
 	hook set_session(c);
 
-	c$postgresql_state$version = version;
+	c$postgresql_state$version = Version($major=major, $minor=minor);
 	c$postgresql$frontend = "startup";
 	emit_log(c);
 }
 
-event PostgreSQL::terminate(c: connection, is_orig: bool) {
+event PostgreSQL::terminate(c: connection) {
 	hook set_session(c);
 	c$postgresql$frontend = "terminate";
 	emit_log(c);
 }
 
-event PostgreSQL::simple_query(c: connection, is_orig: bool, query: string) {
+event PostgreSQL::simple_query(c: connection, query: string) {
 	hook set_session(c);
 	c$postgresql$frontend = "simple_query";
 	c$postgresql$frontend_arg = query;
 	c$postgresql_state$rows = 0;
 }
 
-event PostgreSQL::data_row(c: connection, is_orig: bool) {
+event PostgreSQL::data_row(c: connection, column_values: count) {
 	hook set_session(c);
 	++c$postgresql_state$rows;
 }
 
-event PostgreSQL::ready_for_query(c: connection, is_orig: bool, transaction_status: string) {
+event PostgreSQL::ready_for_query(c: connection, transaction_status: string) {
 	# Log a query (if there was one).
 	if ( ! c?$postgresql )
 		return;
