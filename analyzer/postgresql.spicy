@@ -38,7 +38,7 @@ type ProtocolVersion = unit {
     minor: uint16;
 };
 
-type Parameter = unit {
+type StartupParameter = unit {
     name: bytes &until=b"\x00";
     value: bytes &until=b"\x00";
 };
@@ -46,7 +46,7 @@ type Parameter = unit {
 type StartupMessage = unit {
     length: uint32 &requires=(self.length >= 9);
     version: ProtocolVersion;
-    parameters: Parameter[] &size=self.length - 9;
+    parameters: StartupParameter[] &size=self.length - 9;
     : b"\x00";
 };
 

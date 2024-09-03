@@ -109,28 +109,23 @@ event PostgreSQL::ssl_reply(c: connection, is_orig: bool, b: string) {
 	emit_log(c);
 }
 
-event PostgreSQL::startup_message(
-	c: connection,
-	is_orig:
-	bool, version: Version,
-	parameters: table[string] of string
-) {
+event PostgreSQL::startup_parameter(c: connection, name: string, value: string) {
+	hook set_session(c);
+
+	if ( name == "user" ) {
+		c$postgresql_state$user = value;
+	} else if ( name == "database" ) {
+		c$postgresql_state$database = value;
+	} else if ( name== "application_name" ) {
+		c$postgresql_state$application_name = value;
+	}
+}
+
+event PostgreSQL::startup_message(c: connection, version: Version) {
 	hook set_session(c);
 
 	c$postgresql_state$version = version;
-	if ( "user" in parameters )
-		c$postgresql_state$user = parameters["user"];
-
-	if ( "database" in parameters )
-		c$postgresql_state$database = parameters["database"];
-
-	if ( "application_name" in parameters )
-		c$postgresql_state$application_name = parameters["application_name"];
-
 	c$postgresql$frontend = "startup";
-
-	# Not sure this is great, but unclear where to put them otherwise.
-	c$postgresql$frontend_arg = to_json(parameters);
 	emit_log(c);
 }
 

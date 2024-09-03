@@ -18,12 +18,9 @@ on PostgreSQL::SSLRequest -> event PostgreSQL::ssl_request($conn, $is_orig);
 # Reply from server about outcome of ssl. either "S" or "N" is expected
 on PostgreSQL::MaybeBackendSSL::ssl_byte -> event PostgreSQL::ssl_reply($conn, $is_orig, self.ssl_byte);
 
-on PostgreSQL::StartupMessage -> event PostgreSQL::startup_message(
-    $conn,
-    $is_orig,
-    tuple(self.version.major, self.version.minor),
-    Zeek_PostgreSQL::convert_parameters_to_map(self.parameters)
-);
+on PostgreSQL::StartupParameter -> event PostgreSQL::startup_parameter($conn, self.name, self.value);
+
+on PostgreSQL::StartupMessage -> event PostgreSQL::startup_message($conn, tuple(self.version.major, self.version.minor));
 
 on PostgreSQL::Terminate -> event PostgreSQL::terminate($conn, $is_orig);
 
@@ -33,3 +30,5 @@ on PostgreSQL::ReadyForQuery -> event PostgreSQL::ready_for_query($conn, $is_ori
 
 # TODO: Parses row...
 on PostgreSQL::DataRow -> event PostgreSQL::data_row($conn, $is_orig);
+
+on PostgreSQL::ParameterStatus -> event PostgreSQL::parameter_status($conn, self.name, self.value);
