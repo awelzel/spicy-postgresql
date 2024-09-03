@@ -44,6 +44,8 @@ export {
 
 	## Default hook into PostgreSQL logging.
 	global log_postgresql: event(rec: Info);
+
+	global finalize_postgresql: Conn::RemovalHook;
 }
 
 redef record connection += {
@@ -65,8 +67,10 @@ hook set_session(c: connection) {
 	if ( ! c?$postgresql )
 		c$postgresql = Info($ts=network_time(), $uid=c$uid, $id=c$id);
 
-	if ( ! c?$postgresql_state )
+	if ( ! c?$postgresql_state ) {
 		c$postgresql_state = State();
+		Conn::register_removal_hook(c, finalize_postgresql);
+	}
 }
 
 function emit_log(c: connection) {
@@ -165,7 +169,6 @@ event PostgreSQL::not_implemented(c: connection, is_orig: bool, typ: string, chu
 		Reporter::warning(fmt("PostgreSQL: not_implemented %s: %s (%s is_orig=%s)", typ, to_json(chunk), c$id, is_orig));
 }
 
-# TODO: Switch to connection finalizers
-event connection_state_remove(c: connection) &priority=-5 {
+hook finalize_postgresql(c: connection) &priority=-5 {
 	emit_log(c);
 }
