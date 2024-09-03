@@ -15,7 +15,7 @@ on PostgreSQL::AuthenticationResponse -> event PostgreSQL::authentication_respon
 
 on PostgreSQL::SSLRequest -> event PostgreSQL::ssl_request($conn);
 
-on PostgreSQL::MaybeBackendSSL::ssl_byte -> event PostgreSQL::ssl_reply($conn, self.ssl_byte);
+on PostgreSQL::MaybeBackendSSL::ssl_byte -> event PostgreSQL::ssl_reply($conn, ("%c" % self.ssl_byte));
 
 on PostgreSQL::StartupParameter -> event PostgreSQL::startup_parameter($conn, self.name, self.value);
 

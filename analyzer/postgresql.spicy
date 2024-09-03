@@ -52,9 +52,9 @@ type StartupMessage = unit {
 
 type SSLRequest = unit {
     length: uint32;
-    request_code: bytes &size=4 {
+    request_code: uint32 {
 
-        if (self.length != 8 || self.request_code != b"\x04\xd2\x16\x2f")
+        if (self.length != 8 || self.request_code != 0x04d2162f)
             self.backtrack();
 
         self.ssl_requested = True;
@@ -176,9 +176,9 @@ type MaybeBackendSSL = unit(ctx: State&) {
     # Connected SSL, or plaintext.
     sink s1;
 
-    ssl_byte: bytes &size=1 &requires=($$ == b"S" || $$ == b"N") {
+    ssl_byte: uint8 &requires=($$ == 'S' || $$ == 'N') {
         # print "backend ssl_byte", $$;
-        if ($$ == b"S") {
+        if ($$ == 'S') {
             ctx.ssl_backend_state = SSLBackendState::S;
             if (!ctx.ssl_sink_connected) {
                 ctx.ssl_sink.connect(new SSLSink());
