@@ -18,12 +18,12 @@ on PostgreSQL::MaybeBackendSSL::ssl_byte {
 }
 
 on PostgreSQL::SSLSink::%init {
-  zeek::protocol_begin("SSL");
+    zeek::protocol_begin("SSL");
 }
 
 on PostgreSQL::SSLSink::chunk {
-  # print "ssl_chunk", zeek::is_orig(), self;
-  zeek::protocol_data_in(zeek::is_orig(), self.chunk);
+    # print "ssl_chunk", zeek::is_orig(), self;
+    zeek::protocol_data_in(zeek::is_orig(), self.chunk);
 }
 
 on PostgreSQL::FrontendMessage::%error {
@@ -34,10 +34,9 @@ on PostgreSQL::BackendMessage::%error {
     zeek::reject_protocol("error while parsing PostgreSQL");
 }
 
-public function convert_parameters_to_map(parameters: vector<PostgreSQL::Parameter>) : map<bytes, bytes> {
+public function convert_parameters_to_map(parameters: vector<PostgreSQL::Parameter>): map<bytes, bytes> {
     local t: map<bytes, bytes>;
-    for ( p in parameters )
-        t[p.name] = p.value;
+    for (p in parameters)t[p.name] = p.value;
 
-    return t;
+return t;
 }

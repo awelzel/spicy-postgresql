@@ -6,9 +6,15 @@
 
 module PostgreSQL;
 
-type SSLFrontendState = enum {Requested, NotRequested};
+type SSLFrontendState = enum {
+    Requested,
+    NotRequested,
+};
 
-type SSLBackendState = enum {S, N};
+type SSLBackendState = enum {
+    S,
+    N,
+};
 
 # When a connection switches to SSL, this consumes all the SSL chunks.
 # In zeek_postgres.spicy this calls zeek::protocol_begin() and then
@@ -16,9 +22,8 @@ type SSLBackendState = enum {S, N};
 #
 # There's a single SSLSink shared between backend and frontend.
 type SSLSink = unit {
-  chunk: bytes &chunked &eod;
+    chunk: bytes &chunked &eod;
 };
-
 
 # Used as context for synchronization between frontend/backend.
 type State = tuple<
@@ -28,135 +33,131 @@ type State = tuple<
   ssl_sink_connected: bool,
 >;
 
-
 type ProtocolVersion = unit {
-  major: uint16;
-  minor: uint16;
+    major: uint16;
+    minor: uint16;
 };
-
 
 type Parameter = unit {
-  name:  bytes &until=b"\x00";
-  value: bytes &until=b"\x00";
+    name: bytes &until=b"\x00";
+    value: bytes &until=b"\x00";
 };
 
-
 type StartupMessage = unit {
-  length:     uint32 &requires=(self.length >= 9);
-  version:    ProtocolVersion;
-  parameters: Parameter[] &size=self.length - 9;
-  :           b"\x00";
+    length: uint32 &requires=(self.length >= 9);
+    version: ProtocolVersion;
+    parameters: Parameter[] &size=self.length - 9;
+    : b"\x00";
 };
 
 type SSLRequest = unit {
-  length: uint32;
-  request_code: bytes &size=4 {
+    length: uint32;
+    request_code: bytes &size=4 {
 
-    if ( self.length != 8 || self.request_code != b"\x04\xd2\x16\x2f" )
-      self.backtrack();
+        if (self.length != 8 || self.request_code != b"\x04\xd2\x16\x2f")
+            self.backtrack();
 
-    self.ssl_requested = True;
-  }
+        self.ssl_requested = True;
+    }
 
-  # For usage from whether or not &try succeeded.
-  var ssl_requested: bool;
+    # For usage from whether or not &try succeeded.
+    var ssl_requested: bool;
 };
 
 # Top-level entry for the client.
 public type FrontendMessages = unit {
-  %context = State;
-  on %init {
-    # https://github.com/zeek/spicy/issues/1326
-    self.context().ssl_frontend_state = SSLFrontendState::Undef;
-    self.context().ssl_backend_state = SSLBackendState::Undef;
-    # If this isn't done, the ssl_sink is a Null reference. Also,
-    # we only want to use a single sink for both, frontend and
-    # backend (only call protocol_begin() once).
-    self.context().ssl_sink = self.s1;
-    self.context().ssl_sink_connected = False;
-  }
-
-  var buffered: vector<bytes>;
-  var s1_connected: bool;
-  sink s1;
-
-  # Try parsing a client SSL request. This is optional, so we do
-  # it with &try and then set the context with the result so we
-  # can behave accordingly when parsing BackendMessages.
-  #
-  # TODO: Replace with switch rather than &try / backtrack().
-  #       Need to figure out how/when to set the ssl_frontend_state
-  #       if parsing wasn't successful.
-  ssl_request: SSLRequest &try {
-    if ( self.ssl_request.ssl_requested ) {
-      self.context().ssl_frontend_state = SSLFrontendState::Requested;
-    } else {
-      self.context().ssl_frontend_state = SSLFrontendState::NotRequested;
-      self.context().ssl_backend_state = SSLBackendState::N;
+    %context = State;
+    on %init {
+        # https://github.com/zeek/spicy/issues/1326
+        self.context().ssl_frontend_state = SSLFrontendState::Undef;
+        self.context().ssl_backend_state = SSLBackendState::Undef;
+        # If this isn't done, the ssl_sink is a Null reference. Also,
+        # we only want to use a single sink for both, frontend and
+        # backend (only call protocol_begin() once).
+        self.context().ssl_sink = self.s1;
+        self.context().ssl_sink_connected = False;
     }
 
-    # print "frontend ssl", self.context().ssl_frontend_state;
-  }
+    var buffered: vector<bytes>;
+    var s1_connected: bool;
+    sink s1;
 
-  # If the client requested SSL, we do not know how to continue parsing
-  # until the server confirmed SSL. As long as it hasn't responded,
-  # the context() will not be valid yet, so we buffer bytes here until the
-  # context is set.
-  #
-  # If the client has not requested SSL, we set ssl_backend_state above
-  # already and directly connect the PlainFrontendMessages.
-  : bytes &chunked &eod {
-    if ( ! self.context().ssl_backend_state ) {
-      self.buffered.push_back($$);
-    } else {
-      # print "frontend ssl_state backend set!", self.context();
-      if ( ! self.s1_connected ) {
-        if ( self.context().ssl_backend_state == SSLBackendState::S ) {
-          if ( ! self.context().ssl_sink_connected ) {
-            self.context().ssl_sink.connect(new SSLSink());
-            self.context().ssl_sink_connected = True;
-          }
+    # Try parsing a client SSL request. This is optional, so we do
+    # it with &try and then set the context with the result so we
+    # can behave accordingly when parsing BackendMessages.
+    #
+    # TODO: Replace with switch rather than &try / backtrack().
+    #       Need to figure out how/when to set the ssl_frontend_state
+    #       if parsing wasn't successful.
+    ssl_request: SSLRequest &try {
+        if (self.ssl_request.ssl_requested) {
+            self.context().ssl_frontend_state = SSLFrontendState::Requested;
         } else {
-          # print "connecting plain frontend messages";
-          self.s1.connect(new PlainFrontendMessages());
+            self.context().ssl_frontend_state = SSLFrontendState::NotRequested;
+            self.context().ssl_backend_state = SSLBackendState::N;
         }
 
-        self.s1_connected = True;
-
-        if ( |self.buffered| > 0 ) {
-          for ( b in self.buffered )
-            self.s1.write(b);
-        }
-
-        self.buffered.resize(0);
-      }
-
-      self.s1.write($$);
+        # print "frontend ssl", self.context().ssl_frontend_state;
     }
-  }
+
+    # If the client requested SSL, we do not know how to continue parsing
+    # until the server confirmed SSL. As long as it hasn't responded,
+    # the context() will not be valid yet, so we buffer bytes here until the
+    # context is set.
+    #
+    # If the client has not requested SSL, we set ssl_backend_state above
+    # already and directly connect the PlainFrontendMessages.
+    : bytes &chunked &eod {
+        if (!self.context().ssl_backend_state) {
+            self.buffered.push_back($$);
+        } else {
+            # print "frontend ssl_state backend set!", self.context();
+            if (!self.s1_connected) {
+                if (self.context().ssl_backend_state == SSLBackendState::S) {
+                    if (!self.context().ssl_sink_connected) {
+                        self.context().ssl_sink.connect(new SSLSink());
+                        self.context().ssl_sink_connected = True;
+                    }
+                } else {
+                    # print "connecting plain frontend messages";
+                    self.s1.connect(new PlainFrontendMessages());
+                }
+
+                self.s1_connected = True;
+
+                if (|self.buffered| > 0) {
+                    for (b in self.buffered)
+                        self.s1.write(b);
+                }
+
+                self.buffered.resize(0);
+            }
+
+            self.s1.write($$);
+        }
+    }
 };
 
 type PlainFrontendMessages = unit {
-  startup_message: StartupMessage;
-  :                FrontendMessage[];
+    startup_message: StartupMessage;
+    : FrontendMessage[];
 };
 
 type FrontendMessage = unit {
-  typ:    bytes &size=1;
-  length: uint32 &requires=(self.length >= 4);
+    typ: bytes &size=1;
+    length: uint32 &requires=(self.length >= 4);
 
-  switch ( self.typ ) {
-    b"X" -> :                Terminate(self.length-4) &size=self.length-4;
-    b"Q" -> simple_query:    SimpleQuery(self.length-4) &size=self.length-4;
-    *    -> not_implemented: NotImplemented(self.typ, self.length-4) &size=self.length-4;
-  };
+    switch (self.typ) {
+        b"X" -> : Terminate(self.length - 4) &size=self.length - 4;
+        b"Q" -> simple_query: SimpleQuery(self.length - 4) &size=self.length - 4;
+        * -> not_implemented: NotImplemented(self.typ, self.length - 4) &size=self.length - 4;
+    };
 };
 
-type Terminate = unit(length: uint32) {
-};
+type Terminate = unit(length: uint32) {};
 
 type SimpleQuery = unit(length: uint32) {
-  query: bytes &until=b"\x00" &size=length;
+    query: bytes &until=b"\x00" &size=length;
 };
 
 # The client has requested SSL, the server either confirms (S) or
@@ -165,144 +166,143 @@ type SimpleQuery = unit(length: uint32) {
 #
 type MaybeBackendSSL = unit(ctx: State&) {
 
-  # Connected SSL, or plaintext.
-  sink s1;
+    # Connected SSL, or plaintext.
+    sink s1;
 
-  ssl_byte: bytes &size=1 &requires=( $$ == b"S" || $$ == b"N" ) {
-    # print "backend ssl_byte", $$;
-    if ( $$ == b"S" ) {
-      ctx.ssl_backend_state = SSLBackendState::S;
-      if ( ! ctx.ssl_sink_connected ) {
-        ctx.ssl_sink.connect(new SSLSink());
-        ctx.ssl_sink_connected = True;
-      }
+    ssl_byte: bytes &size=1 &requires=($$ == b"S" || $$ == b"N") {
+        # print "backend ssl_byte", $$;
+        if ($$ == b"S") {
+            ctx.ssl_backend_state = SSLBackendState::S;
+            if (!ctx.ssl_sink_connected) {
+                ctx.ssl_sink.connect(new SSLSink());
+                ctx.ssl_sink_connected = True;
+            }
 
-      # Share the SSL sink with the frontend.
-      self.s1 = ctx.ssl_sink;
-    } else {
-      ctx.ssl_backend_state = SSLBackendState::N;
-      self.s1.connect(new PlainBackendMessages());
+            # Share the SSL sink with the frontend.
+            self.s1 = ctx.ssl_sink;
+        } else {
+            ctx.ssl_backend_state = SSLBackendState::N;
+            self.s1.connect(new PlainBackendMessages());
+        }
     }
-  }
 
-  # Now that s1 is connected, forward the rest of the connection to it.
-  : bytes &chunked &eod -> self.s1;
+    # Now that s1 is connected, forward the rest of the connection to it.
+    : bytes &chunked &eod -> self.s1;
 };
-
 
 # Top-level entry for the server.
 public type BackendMessages = unit {
-  %context = State;
+    %context = State;
 
-  var buffered: vector<bytes>;
-  var s1_connected: bool;
-  sink s1;
+    var buffered: vector<bytes>;
+    var s1_connected: bool;
+    sink s1;
 
-  # Buffer until the SSL frontend state was populated.
-  : bytes &chunked &eod {
-    if ( ! self.context().ssl_frontend_state ) {
-      # print "backend buffering ", |$$|;
-      self.buffered.push_back($$);
-    } else {
-      # The ssl_frontend_state has been set. If The client requested SSL,
-      # connect to an SSLMaybe instance. If it did not, connect
-      # directly to PlainBackendMessages.
-      # print "backend", self.context(), |self.buffered|, self.s1, self.s1_connected;
-      if ( ! self.s1_connected ) {
-
-        if ( self.context().ssl_frontend_state == SSLFrontendState::Requested ) {
-          self.s1.connect(new MaybeBackendSSL(self.context()));
+    # Buffer until the SSL frontend state was populated.
+    : bytes &chunked &eod {
+        if (!self.context().ssl_frontend_state) {
+            # print "backend buffering ", |$$|;
+            self.buffered.push_back($$);
         } else {
-          self.s1.connect(new PlainBackendMessages());
+            # The ssl_frontend_state has been set. If The client requested SSL,
+            # connect to an SSLMaybe instance. If it did not, connect
+            # directly to PlainBackendMessages.
+            # print "backend", self.context(), |self.buffered|, self.s1, self.s1_connected;
+            if (!self.s1_connected) {
+
+                if (self.context().ssl_frontend_state == SSLFrontendState::Requested) {
+                    self.s1.connect(new MaybeBackendSSL(self.context()));
+                } else {
+                    self.s1.connect(new PlainBackendMessages());
+                }
+
+                self.s1_connected = True;
+
+                if (|self.buffered| > 0) {
+                    for (b in self.buffered)
+                        self.s1.write(b);
+                }
+                self.buffered.resize(0);
+            }
+
+            # print "backend writing to sink", $$, |self.s1|;
+            self.s1.write($$);
         }
-
-        self.s1_connected = True;
-
-        if ( |self.buffered| > 0 ) {
-          for ( b in self.buffered )
-            self.s1.write(b);
-        }
-        self.buffered.resize(0);
-      }
-
-      # print "backend writing to sink", $$, |self.s1|;
-      self.s1.write($$);
     }
-  }
 };
 
 type PlainBackendMessages = unit {
-  : BackendMessage[];
+    : BackendMessage[];
 
-  on %error {
-    print "Damn, PlainBackendMessages error";
-  }
+    on %error {
+        print "Damn, PlainBackendMessages error";
+    }
 };
 
 type BackendMessage = unit {
-  typ:    bytes &size=1;
-  length: uint32 &requires=(self.length >= 4);
+    typ: bytes &size=1;
+    length: uint32 &requires=(self.length >= 4);
 
-  switch ( self.typ ) {
-    b"B" -> backend_key_data: BackendKeyData(self.length-4);
-    b"E" -> error:            ErrorResponse(self.length-4);
-    b"R" -> auth:             Authentication(self.length-4);
-    b"S" -> parameter_status: ParameterStatus(self.length-4);
-    b"T" -> row_description:  RowDescription(self.length-4);
-    b"D" -> data_row:         DataRow(self.length-4);
-    b"Z" -> ready_for_query:  ReadyForQuery(self.length-4);
-    *    -> not_implemented:  NotImplemented(self.typ, self.length-4);
-  } &size=self.length-4;
+    switch (self.typ) {
+        b"B" -> backend_key_data: BackendKeyData(self.length - 4);
+        b"E" -> error: ErrorResponse(self.length - 4);
+        b"R" -> auth: Authentication(self.length - 4);
+        b"S" -> parameter_status: ParameterStatus(self.length - 4);
+        b"T" -> row_description: RowDescription(self.length - 4);
+        b"D" -> data_row: DataRow(self.length - 4);
+        b"Z" -> ready_for_query: ReadyForQuery(self.length - 4);
+        * -> not_implemented: NotImplemented(self.typ, self.length - 4);
+    } &size=self.length - 4;
 
-  # on %done()  {
-  #  print "BackendMessage%done", self;
-  # }
+    # on %done()  {
+    #  print "BackendMessage%done", self;
+    # }
 };
 
 type ParameterStatus = unit(length: uint32) {
-  name:  bytes &until=b"\x00";
-  value: bytes &until=b"\x00";
+    name: bytes &until=b"\x00";
+    value: bytes &until=b"\x00";
 };
 
 # TODO: Just consumes all the bytes currently instead of parsing out details.
 type RowDescription = unit(length: uint32) {
-  not_implemented: bytes &size=length;
+    not_implemented: bytes &size=length;
 };
 
 # Possible values are 'I' if idle (not in a transaction block);
 # 'T' if in a transaction block; or 'E' if in a failed transaction block
 # (queries will be rejected until block is ended).
 type ReadyForQuery = unit(length: uint32) {
-  transaction_status: bytes &size=1;
+    transaction_status: bytes &size=1;
 };
-
 
 # Just for counting right now.
 type DataRow = unit(length: uint32) {
-  todo: bytes &size=length;
+    todo: bytes &size=length;
 };
 
 # Fields with a 1 byte field as documented here:
 # https://www.postgresql.org/docs/current/protocol-error-fields.html
 # TODO: Parse it out nicely or leave that up to script-land?
 type IdentifiedField = unit {
-  code:  bytes &size=1;  # looks better than uint8
-  value: bytes &until=b"\x00";
+    code: bytes &size=1; # looks better than uint8
+    value: bytes &until=b"\x00";
 };
 
 type ErrorResponse = unit(length: uint32) {
-    fields: IdentifiedField[] &size=(length-1);
-    :       b"\x00";
+    fields: IdentifiedField[] &size=(length - 1);
+    : b"\x00";
 };
 
 # TODO (although it's unclear if we want to parse SASL all that much...)
 type Authentication = unit(length: uint32) {
-  identifier:  uint32;
-  switch ( self.identifier ) {
-    10     -> sasl:            AuthenticationSASL(length - 4) &size=(length-4);
-    11, 12 -> sasl_bytes:      bytes &size=(length - 4);
-    *      -> not_implemented: bytes &size=(length - 4);
-  };
+    identifier: uint32;
+    switch (self.identifier) {
+        10 -> sasl: AuthenticationSASL(length - 4) &size=(length - 4);
+        11,
+        12 -> sasl_bytes: bytes &size=(length - 4);
+        * -> not_implemented: bytes &size=(length - 4);
+    };
 };
 
 type SASLMechanism = unit {
@@ -310,18 +310,18 @@ type SASLMechanism = unit {
 };
 
 type AuthenticationSASL = unit(length: uint32) {
-  mechanisms: SASLMechanism[] &size=(length - 1);
-  : b"\x00";
+    mechanisms: SASLMechanism[] &size=(length - 1);
+    : b"\x00";
 };
 
 type BackendKeyData = unit(length: uint32) {
-  process_id: uint32;
-  secret_key: uint32;
+    process_id: uint32;
+    secret_key: uint32;
 };
 
 type NotImplemented = unit(typ: bytes, length: uint32) {
-  chunk: bytes &size=length {
-    self.typ = typ;
-  }
-  var typ: bytes;
+    chunk: bytes &size=length {
+        self.typ = typ;
+    }
+    var typ: bytes;
 };

@@ -19,4 +19,3 @@ analyzer = PostgreSQL
 protocol = TCP
 unit_orig = Message
 unit_resp = Message
-
