@@ -8,3 +8,7 @@
 
 redef DumpEvents::dump_all_events = T;
 redef DumpEvents::include=/^(PostgreSQL|analyzer_)/;
+
+event zeek_init() {
+	Analyzer::register_for_port(Analyzer::ANALYZER_POSTGRESQL, 5432/tcp);
+}

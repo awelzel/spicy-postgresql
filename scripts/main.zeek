@@ -50,6 +50,10 @@ export {
 	global log_postgresql: event(rec: Info);
 
 	global finalize_postgresql: Conn::RemovalHook;
+
+	global ports: set[port] = {
+		5432/tcp,
+	} &redef;
 }
 
 redef record connection += {
@@ -57,13 +61,11 @@ redef record connection += {
 	postgresql_state: State &optional;
 };
 
-const ports = {
-	5432/tcp
-};
-
 redef likely_server_ports += { ports };
 
-event zeek_init() &priority=5 {
+event zeek_init() {
+	Analyzer::register_for_ports(Analyzer::ANALYZER_POSTGRESQL, ports);
+
 	Log::create_stream(PostgreSQL::LOG, [$columns=Info, $ev=log_postgresql, $path="postgresql"]);
 }
 

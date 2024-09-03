@@ -3,8 +3,7 @@ import Zeek_PostgreSQL;
 
 protocol analyzer PostgreSQL over TCP:
     parse originator with PostgreSQL::FrontendMessages,
-    parse responder with PostgreSQL::BackendMessages,
-    port 5432/tcp;
+    parse responder with PostgreSQL::BackendMessages;
 
 # Low level frontend/backend events.
 on PostgreSQL::NotImplemented -> event PostgreSQL::not_implemented($conn, $is_orig, self.typ, self.chunk);
