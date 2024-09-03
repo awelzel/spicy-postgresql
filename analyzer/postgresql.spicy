@@ -26,12 +26,12 @@ type SSLSink = unit {
 };
 
 # Used as context for synchronization between frontend/backend.
-type State = tuple<
-  ssl_frontend_state: SSLFrontendState,
-  ssl_backend_state: SSLBackendState,
-  ssl_sink: sink&,
-  ssl_sink_connected: bool,
->;
+type Context = struct {
+    ssl_frontend_state: SSLFrontendState;
+    ssl_backend_state: SSLBackendState;
+    ssl_sink: sink&;
+    ssl_sink_connected: bool;
+};
 
 type ProtocolVersion = unit {
     major: uint16;
@@ -66,11 +66,8 @@ type SSLRequest = unit {
 
 # Top-level entry for the client.
 public type FrontendMessages = unit {
-    %context = State;
+    %context = Context;
     on %init {
-        # https://github.com/zeek/spicy/issues/1326
-        self.context().ssl_frontend_state = SSLFrontendState::Undef;
-        self.context().ssl_backend_state = SSLBackendState::Undef;
         # If this isn't done, the ssl_sink is a Null reference. Also,
         # we only want to use a single sink for both, frontend and
         # backend (only call protocol_begin() once).
@@ -171,7 +168,7 @@ type SimpleQuery = unit(length: uint32) {
 # stays in plaintext (N) mode. Depending on the result, we connect
 # our sink to the SSL sink, or to a PlainBackendMessages unit.
 #
-type MaybeBackendSSL = unit(ctx: State&) {
+type MaybeBackendSSL = unit(ctx: Context&) {
 
     # Connected SSL, or plaintext.
     sink s1;
@@ -199,7 +196,7 @@ type MaybeBackendSSL = unit(ctx: State&) {
 
 # Top-level entry for the server.
 public type BackendMessages = unit {
-    %context = State;
+    %context = Context;
 
     var buffered: vector<bytes>;
     var s1_connected: bool;
