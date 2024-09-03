@@ -1,8 +1,0 @@
-# @TEST-DOC: Test that we can compile standalone.
-#
-# @TEST-EXEC: spicyc ${DIST}/analyzer/postgresql.spicy -j -d -o postgresql.hlto
-#
-# XXX not testing...
-#
-# @XTEST-EXEC: printf "\x00\x00\x00\x08\x04\xd2\x16\x2f." | spicy-dump -p PostgreSQL::FrontendMessages postgresql.hlto >output 2>&1
-# @XTEST-EXEC: TEST_DIFF_CANONIFIER= btest-diff output
