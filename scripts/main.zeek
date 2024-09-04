@@ -145,6 +145,16 @@ event PostgreSQL::error_response_identified_field(c: connection, code: string, v
 	errors += fmt("%s=%s", error_ids[code], value);
 }
 
+event PostgreSQL::notice_response_identified_field(c: connection, code: string, value: string) {
+	hook set_session(c);
+
+	local notice = fmt("%s=%s", error_ids[code], value);
+	if ( c$postgresql?$backend_arg )
+		c$postgresql$backend_arg += "," + notice;
+	else
+		c$postgresql$backend_arg = notice;
+}
+
 event PostgreSQL::error_response(c: connection) {
 	hook set_session(c);
 

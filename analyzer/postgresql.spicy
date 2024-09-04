@@ -252,6 +252,7 @@ type BackendMessage = unit {
         'S' -> parameter_status: ParameterStatus(self.length - 4);
         'D' -> data_row: DataRow(self.length - 4);
         'Z' -> ready_for_query: ReadyForQuery(self.length - 4);
+        'N' -> notice: NoticeResponse(self.length - 4);
         * -> not_implemented: NotImplemented(self.typ, self.length - 4);
     } &size=self.length - 4;
 };
@@ -273,6 +274,16 @@ type ReadyForQuery = unit(length: uint32) {
     }
 };
 
+type NoticeIdentifiedField = unit {
+    code: uint8;
+    value: bytes &until=b"\x00";
+};
+
+type NoticeResponse = unit(length: uint32) {
+    : NoticeIdentifiedField[] &size=(length - 1);
+    : b"\x00";
+};
+
 # Just for counting right now.
 type DataRow = unit(length: uint32) {
     column_values: uint16;
@@ -281,7 +292,6 @@ type DataRow = unit(length: uint32) {
 
 # Fields with a 1 byte field as documented here:
 # https://www.postgresql.org/docs/current/protocol-error-fields.html
-# TODO: Parse it out nicely or leave that up to script-land?
 type ErrorIdentifiedField = unit {
     code: uint8;
     value: bytes &until=b"\x00";

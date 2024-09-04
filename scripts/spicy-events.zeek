@@ -93,6 +93,24 @@ global PostgreSQL::error_response_identified_field: event(c: connection, code: s
 ## .. zeek:see:: PostgreSQL::error_response_identified_field
 global PostgreSQL::error_response: event(c: connection);
 
+## Event generated for identified field within a NoticeResponse.
+##
+## c: The connection.
+##
+## code: The code (https://www.postgresql.org/docs/current/protocol-error-fields.html)
+##
+## value: The field value.
+##
+## .. zeek:see:: PostgreSQL::notice_response
+global PostgreSQL::notice_response_identified_field: event(c: connection, code: string, value: string);
+
+## Event generated for a NoticeResponse.
+##
+## c: The connection.
+##
+## .. zeek:see:: PostgreSQL::notice_response_identified_field
+global PostgreSQL::notice_response: event(c: connection);
+
 ## Event generated for every backend DataRow message.
 ##
 ## c: The connection.

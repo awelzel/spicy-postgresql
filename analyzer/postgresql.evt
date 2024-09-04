@@ -29,6 +29,10 @@ on PostgreSQL::SimpleQuery -> event PostgreSQL::simple_query($conn, self.query);
 
 on PostgreSQL::ReadyForQuery -> event PostgreSQL::ready_for_query($conn, self.transaction_status);
 
+on PostgreSQL::NoticeIdentifiedField -> event PostgreSQL::notice_response_identified_field($conn, ("%c" % self.code), self.value);
+
+on PostgreSQL::NoticeResponse -> event PostgreSQL::notice_response($conn);
+
 on PostgreSQL::Terminate -> event PostgreSQL::terminate($conn);
 
 on PostgreSQL::DataRow -> event PostgreSQL::data_row($conn, self.column_values);
