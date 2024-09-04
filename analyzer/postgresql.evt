@@ -13,7 +13,7 @@ on PostgreSQL::AuthenticationRequest if ( self.identifier == 0 ) -> event Postgr
 
 on PostgreSQL::AuthenticationResponse -> event PostgreSQL::authentication_response($conn, self.data);
 
-on PostgreSQL::SSLRequest -> event PostgreSQL::ssl_request($conn);
+on PostgreSQL::FrontendMessages::ssl_request -> event PostgreSQL::ssl_request($conn);
 
 on PostgreSQL::MaybeBackendSSL::ssl_byte -> event PostgreSQL::ssl_reply($conn, ("%c" % self.ssl_byte));
 

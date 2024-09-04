@@ -6,6 +6,8 @@
 
 module PostgreSQL;
 
+import spicy;
+
 type SSLFrontendState = enum {
     Requested,
     NotRequested,
@@ -52,63 +54,67 @@ type StartupMessage = unit {
     : b"\x00";
 };
 
-type SSLRequest = unit {
-    length: uint32;
-    request_code: uint32 {
-
-        if (self.length != 8 || self.request_code != 0x04d2162f)
-            self.backtrack();
-
-        self.ssl_requested = True;
-    }
-
-    # For usage from whether or not &try succeeded.
-    var ssl_requested: bool;
-};
-
 # Top-level entry for the client.
 public type FrontendMessages = unit {
     %context = Context;
     on %init {
-        # If this isn't done, the ssl_sink is a Null reference. Also,
-        # we only want to use a single sink for both, frontend and
-        # backend (only call protocol_begin() once).
+        # Until the first FrontendMessages are initialized, ssl_sink in the
+        # context is a Null reference. Also, we want to use a single sink
+        # for both, frontend and backend by calling beg
         self.context().ssl_sink = self.s1;
-        self.context().ssl_sink_connected = False;
     }
 
     var buffered: vector<bytes>;
     var s1_connected: bool;
+    var ssl_requested: bool;
     sink s1;
 
-    # Try parsing a client SSL request. This is optional, so we do
-    # it with &try and then set the context with the result so we
-    # can behave accordingly when parsing BackendMessages.
-    #
-    # TODO: Replace with switch rather than &try / backtrack().
-    #       Need to figure out how/when to set the ssl_frontend_state
-    #       if parsing wasn't successful.
-    ssl_request: SSLRequest &try {
-        if (self.ssl_request.ssl_requested) {
+    # Peak at the client data.
+    length: uint32 &requires=(self.length >= 8);
+    version_or_magic: uint32 {
+        self.ssl_requested = self.length == 8 && $$ == 80877103;
+
+        if (self.ssl_requested) {
             self.context().ssl_frontend_state = SSLFrontendState::Requested;
         } else {
             self.context().ssl_frontend_state = SSLFrontendState::NotRequested;
             self.context().ssl_backend_state = SSLBackendState::N;
-        }
 
-        # print "frontend ssl", self.context().ssl_frontend_state;
+            # Pre-check the supported major version here.
+            local major = $$>>16;
+            if (major != 3)
+                throw "unsupported PostgreSQL major version %s" % major;
+
+            # Put length and version back into the buffer so PlainFrontendMessages
+            # can re-parse it. Alternatively could use self.input() and
+            # self.set_input() but was afraid of random access implications
+            # in a top-level unit.
+            self.buffered.push_back(pack(self.length, spicy::ByteOrder::Network));
+            self.buffered.push_back(pack(self.version_or_magic, spicy::ByteOrder::Network));
+        }
     }
 
+    ssl_request: void if(self.ssl_requested == True);
+
+    # print "frontend ssl", self.context();
+
     # If the client requested SSL, we do not know how to continue parsing
-    # until the server confirmed SSL. As long as it hasn't responded,
-    # the context() will not be valid yet, so we buffer bytes here until the
-    # context is set.
+    # until the server confirmed SSL usage via 'S' or 'N' responses. As long
+    # as it hasn't responded, stall the parsing here and buffer bytes until
+    # the context() is populated.
     #
-    # If the client has not requested SSL, we set ssl_backend_state above
-    # already and directly connect the PlainFrontendMessages.
+    # In normal operations, Zeek should see the server's response before
+    # attempting to parse more data, but Robin was concerned it that in
+    # some circumstances (out-of-order packets, reassembly artifacts) we
+    # may see the client's data before the server's.
+    #
+    # In the future, barrier: https://github.com/zeek/spicy/pull/1373
     : bytes &chunked &eod {
         if (!self.context().ssl_backend_state) {
             self.buffered.push_back($$);
+
+            if (|self.buffered| > 10)
+                throw "too many frontend messages buffered";
         } else {
             # print "frontend ssl_state backend set!", self.context();
             if (!self.s1_connected) {
@@ -209,6 +215,9 @@ public type BackendMessages = unit {
         if (!self.context().ssl_frontend_state) {
             # print "backend buffering ", |$$|;
             self.buffered.push_back($$);
+
+            if (|self.buffered| > 10)
+                throw "too many backend messages buffered";
         } else {
             # The ssl_frontend_state has been set. If The client requested SSL,
             # connect to an SSLMaybe instance. If it did not, connect
