@@ -26,6 +26,10 @@ on PostgreSQL::SSLSink::chunk {
     zeek::protocol_data_in(zeek::is_orig(), self.chunk);
 }
 
+on PostgreSQL::StartupMessage::%error(msg: string) {
+    zeek::reject_protocol("error while parsing PostgreSQL StartupMessage: %s" % msg);
+}
+
 on PostgreSQL::FrontendMessage::%error(msg: string) {
     zeek::reject_protocol("error while parsing PostgreSQL: %s" % msg);
 }

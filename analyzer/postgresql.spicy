@@ -39,13 +39,15 @@ type ProtocolVersion = unit {
 };
 
 type StartupParameter = unit {
-    name: bytes &until=b"\x00";
-    value: bytes &until=b"\x00";
+    name: /[-_\/A-Za-z0-9]+/ &requires=(|$$| > 0);
+    : uint8 &requires=($$ == 0);
+    value: /[\x20-\x7e]+/ &requires=(|$$| > 0);
+    : uint8 &requires=($$ == 0);
 };
 
 type StartupMessage = unit {
     length: uint32 &requires=(self.length >= 9);
-    version: ProtocolVersion;
+    version: ProtocolVersion &requires=($$.major == 3);
     parameters: StartupParameter[] &size=self.length - 9;
     : b"\x00";
 };
@@ -237,10 +239,6 @@ public type BackendMessages = unit {
 
 type PlainBackendMessages = unit {
     : BackendMessage[];
-
-    on %error {
-        print "Damn, PlainBackendMessages error";
-    }
 };
 
 type BackendMessage = unit {
@@ -259,8 +257,10 @@ type BackendMessage = unit {
 };
 
 type ParameterStatus = unit(length: uint32) {
-    name: bytes &until=b"\x00";
-    value: bytes &until=b"\x00";
+    name: /[-_\/A-Za-z0-9]+/ &requires=(|$$| > 0);
+    : uint8 &requires=($$ == 0);
+    value: /[\x20-\x7e]+/ &requires=(|$$| > 0);
+    : uint8 &requires=($$ == 0);
 };
 
 # Possible values are 'I' if idle (not in a transaction block);
