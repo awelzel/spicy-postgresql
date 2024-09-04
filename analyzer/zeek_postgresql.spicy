@@ -26,17 +26,14 @@ on PostgreSQL::SSLSink::chunk {
     zeek::protocol_data_in(zeek::is_orig(), self.chunk);
 }
 
-on PostgreSQL::FrontendMessage::%error {
-    zeek::reject_protocol("error while parsing PostgreSQL");
+on PostgreSQL::StartupMessage::%error(msg: string) {
+    zeek::reject_protocol("error while parsing PostgreSQL StartupMessage: %s" % msg);
 }
 
-on PostgreSQL::BackendMessage::%error {
-    zeek::reject_protocol("error while parsing PostgreSQL");
+on PostgreSQL::FrontendMessage::%error(msg: string) {
+    zeek::reject_protocol("error while parsing PostgreSQL: %s" % msg);
 }
 
-public function convert_parameters_to_map(parameters: vector<PostgreSQL::Parameter>): map<bytes, bytes> {
-    local t: map<bytes, bytes>;
-    for (p in parameters)t[p.name] = p.value;
-
-return t;
+on PostgreSQL::BackendMessage::%error(msg: string) {
+    zeek::reject_protocol("error while parsing PostgreSQL: %s" % msg);
 }

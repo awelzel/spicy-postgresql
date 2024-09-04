@@ -6,6 +6,8 @@
 
 module PostgreSQL;
 
+import spicy;
+
 type SSLFrontendState = enum {
     Requested,
     NotRequested,
@@ -17,8 +19,8 @@ type SSLBackendState = enum {
 };
 
 # When a connection switches to SSL, this consumes all the SSL chunks.
-# In zeek_postgres.spicy this calls zeek::protocol_begin() and then
-# zeek::protocol_data_in()
+# In zeek_postgres.spicy, SSLSink%init calls zeek::protocol_begin() and
+# then zeek::protocol_data_in()
 #
 # There's a single SSLSink shared between backend and frontend.
 type SSLSink = unit {
@@ -26,90 +28,93 @@ type SSLSink = unit {
 };
 
 # Used as context for synchronization between frontend/backend.
-type State = tuple<
-  ssl_frontend_state: SSLFrontendState,
-  ssl_backend_state: SSLBackendState,
-  ssl_sink: sink&,
-  ssl_sink_connected: bool,
->;
+type Context = struct {
+    ssl_frontend_state: SSLFrontendState;
+    ssl_backend_state: SSLBackendState;
+    ssl_sink: sink&;
+    ssl_sink_connected: bool;
+};
 
 type ProtocolVersion = unit {
     major: uint16;
     minor: uint16;
 };
 
-type Parameter = unit {
-    name: bytes &until=b"\x00";
-    value: bytes &until=b"\x00";
+type StartupParameter = unit {
+    name: /[-_\/A-Za-z0-9]+/ &requires=(|$$| > 0);
+    : uint8 &requires=($$ == 0);
+    value: /[\x20-\x7e]+/ &requires=(|$$| > 0);
+    : uint8 &requires=($$ == 0);
 };
 
 type StartupMessage = unit {
     length: uint32 &requires=(self.length >= 9);
-    version: ProtocolVersion;
-    parameters: Parameter[] &size=self.length - 9;
+    version: ProtocolVersion &requires=($$.major == 3);
+    parameters: StartupParameter[] &size=self.length - 9;
     : b"\x00";
-};
-
-type SSLRequest = unit {
-    length: uint32;
-    request_code: bytes &size=4 {
-
-        if (self.length != 8 || self.request_code != b"\x04\xd2\x16\x2f")
-            self.backtrack();
-
-        self.ssl_requested = True;
-    }
-
-    # For usage from whether or not &try succeeded.
-    var ssl_requested: bool;
 };
 
 # Top-level entry for the client.
 public type FrontendMessages = unit {
-    %context = State;
+    %context = Context;
     on %init {
-        # https://github.com/zeek/spicy/issues/1326
-        self.context().ssl_frontend_state = SSLFrontendState::Undef;
-        self.context().ssl_backend_state = SSLBackendState::Undef;
-        # If this isn't done, the ssl_sink is a Null reference. Also,
-        # we only want to use a single sink for both, frontend and
-        # backend (only call protocol_begin() once).
+        # Until the first FrontendMessages are initialized, ssl_sink in the
+        # context is a Null reference. Also, we want to use a single sink
+        # for both, frontend and backend by calling beg
         self.context().ssl_sink = self.s1;
-        self.context().ssl_sink_connected = False;
     }
 
     var buffered: vector<bytes>;
     var s1_connected: bool;
+    var ssl_requested: bool;
     sink s1;
 
-    # Try parsing a client SSL request. This is optional, so we do
-    # it with &try and then set the context with the result so we
-    # can behave accordingly when parsing BackendMessages.
-    #
-    # TODO: Replace with switch rather than &try / backtrack().
-    #       Need to figure out how/when to set the ssl_frontend_state
-    #       if parsing wasn't successful.
-    ssl_request: SSLRequest &try {
-        if (self.ssl_request.ssl_requested) {
+    # Peak at the client data.
+    length: uint32 &requires=(self.length >= 8);
+    version_or_magic: uint32 {
+        self.ssl_requested = self.length == 8 && $$ == 80877103;
+
+        if (self.ssl_requested) {
             self.context().ssl_frontend_state = SSLFrontendState::Requested;
         } else {
             self.context().ssl_frontend_state = SSLFrontendState::NotRequested;
             self.context().ssl_backend_state = SSLBackendState::N;
-        }
 
-        # print "frontend ssl", self.context().ssl_frontend_state;
+            # Pre-check the supported major version here.
+            local major = $$>>16;
+            if (major != 3)
+                throw "unsupported PostgreSQL major version %s" % major;
+
+            # Put length and version back into the buffer so PlainFrontendMessages
+            # can re-parse it. Alternatively could use self.input() and
+            # self.set_input() but was afraid of random access implications
+            # in a top-level unit.
+            self.buffered.push_back(pack(self.length, spicy::ByteOrder::Network));
+            self.buffered.push_back(pack(self.version_or_magic, spicy::ByteOrder::Network));
+        }
     }
 
+    ssl_request: void if(self.ssl_requested == True);
+
+    # print "frontend ssl", self.context();
+
     # If the client requested SSL, we do not know how to continue parsing
-    # until the server confirmed SSL. As long as it hasn't responded,
-    # the context() will not be valid yet, so we buffer bytes here until the
-    # context is set.
+    # until the server confirmed SSL usage via 'S' or 'N' responses. As long
+    # as it hasn't responded, stall the parsing here and buffer bytes until
+    # the context() is populated.
     #
-    # If the client has not requested SSL, we set ssl_backend_state above
-    # already and directly connect the PlainFrontendMessages.
+    # In normal operations, Zeek should see the server's response before
+    # attempting to parse more data, but Robin was concerned it that in
+    # some circumstances (out-of-order packets, reassembly artifacts) we
+    # may see the client's data before the server's.
+    #
+    # In the future, barrier: https://github.com/zeek/spicy/pull/1373
     : bytes &chunked &eod {
         if (!self.context().ssl_backend_state) {
             self.buffered.push_back($$);
+
+            if (|self.buffered| > 10)
+                throw "too many frontend messages buffered";
         } else {
             # print "frontend ssl_state backend set!", self.context();
             if (!self.s1_connected) {
@@ -144,14 +149,21 @@ type PlainFrontendMessages = unit {
 };
 
 type FrontendMessage = unit {
-    typ: bytes &size=1;
+    typ: uint8;
     length: uint32 &requires=(self.length >= 4);
 
     switch (self.typ) {
-        b"X" -> : Terminate(self.length - 4) &size=self.length - 4;
-        b"Q" -> simple_query: SimpleQuery(self.length - 4) &size=self.length - 4;
+        'p' -> : AuthenticationResponse(self.length - 4) &size=self.length - 4;
+        'X' -> : Terminate(self.length - 4) &size=self.length - 4;
+        'Q' -> simple_query: SimpleQuery(self.length - 4) &size=self.length - 4;
         * -> not_implemented: NotImplemented(self.typ, self.length - 4) &size=self.length - 4;
     };
+};
+
+type AuthenticationResponse = unit(length: uint32) {
+    # This is PasswordMessage, SASLInitialMessage, etc. based on context.
+    # For now, just thread it through.
+    data: bytes &eod;
 };
 
 type Terminate = unit(length: uint32) {};
@@ -164,14 +176,14 @@ type SimpleQuery = unit(length: uint32) {
 # stays in plaintext (N) mode. Depending on the result, we connect
 # our sink to the SSL sink, or to a PlainBackendMessages unit.
 #
-type MaybeBackendSSL = unit(ctx: State&) {
+type MaybeBackendSSL = unit(ctx: Context&) {
 
     # Connected SSL, or plaintext.
     sink s1;
 
-    ssl_byte: bytes &size=1 &requires=($$ == b"S" || $$ == b"N") {
+    ssl_byte: uint8 &requires=($$ == 'S' || $$ == 'N') {
         # print "backend ssl_byte", $$;
-        if ($$ == b"S") {
+        if ($$ == 'S') {
             ctx.ssl_backend_state = SSLBackendState::S;
             if (!ctx.ssl_sink_connected) {
                 ctx.ssl_sink.connect(new SSLSink());
@@ -192,7 +204,7 @@ type MaybeBackendSSL = unit(ctx: State&) {
 
 # Top-level entry for the server.
 public type BackendMessages = unit {
-    %context = State;
+    %context = Context;
 
     var buffered: vector<bytes>;
     var s1_connected: bool;
@@ -203,6 +215,9 @@ public type BackendMessages = unit {
         if (!self.context().ssl_frontend_state) {
             # print "backend buffering ", |$$|;
             self.buffered.push_back($$);
+
+            if (|self.buffered| > 10)
+                throw "too many backend messages buffered";
         } else {
             # The ssl_frontend_state has been set. If The client requested SSL,
             # connect to an SSLMaybe instance. If it did not, connect
@@ -233,85 +248,81 @@ public type BackendMessages = unit {
 
 type PlainBackendMessages = unit {
     : BackendMessage[];
-
-    on %error {
-        print "Damn, PlainBackendMessages error";
-    }
 };
 
 type BackendMessage = unit {
-    typ: bytes &size=1;
+    typ: uint8 &size=1;
     length: uint32 &requires=(self.length >= 4);
 
     switch (self.typ) {
-        b"B" -> backend_key_data: BackendKeyData(self.length - 4);
-        b"E" -> error: ErrorResponse(self.length - 4);
-        b"R" -> auth: Authentication(self.length - 4);
-        b"S" -> parameter_status: ParameterStatus(self.length - 4);
-        b"T" -> row_description: RowDescription(self.length - 4);
-        b"D" -> data_row: DataRow(self.length - 4);
-        b"Z" -> ready_for_query: ReadyForQuery(self.length - 4);
+        'K' -> backend_key_data: BackendKeyData(self.length - 4);
+        'E' -> error: ErrorResponse(self.length - 4);
+        'R' -> auth: AuthenticationRequest(self.length - 4);
+        'S' -> parameter_status: ParameterStatus(self.length - 4);
+        'D' -> data_row: DataRow(self.length - 4);
+        'Z' -> ready_for_query: ReadyForQuery(self.length - 4);
+        'N' -> notice: NoticeResponse(self.length - 4);
         * -> not_implemented: NotImplemented(self.typ, self.length - 4);
     } &size=self.length - 4;
-
-    # on %done()  {
-    #  print "BackendMessage%done", self;
-    # }
 };
 
 type ParameterStatus = unit(length: uint32) {
-    name: bytes &until=b"\x00";
-    value: bytes &until=b"\x00";
-};
-
-# TODO: Just consumes all the bytes currently instead of parsing out details.
-type RowDescription = unit(length: uint32) {
-    not_implemented: bytes &size=length;
+    name: /[-_\/A-Za-z0-9]+/ &requires=(|$$| > 0);
+    : uint8 &requires=($$ == 0);
+    value: /[\x20-\x7e]+/ &requires=(|$$| > 0);
+    : uint8 &requires=($$ == 0);
 };
 
 # Possible values are 'I' if idle (not in a transaction block);
 # 'T' if in a transaction block; or 'E' if in a failed transaction block
 # (queries will be rejected until block is ended).
 type ReadyForQuery = unit(length: uint32) {
-    transaction_status: bytes &size=1;
+    var transaction_status: string;
+    status: uint8 &requires=($$ == 'I' || $$ == 'T' || $$ == 'E') {
+        self.transaction_status = ("%c" % $$);
+    }
+};
+
+type NoticeIdentifiedField = unit {
+    code: uint8;
+    value: bytes &until=b"\x00";
+};
+
+type NoticeResponse = unit(length: uint32) {
+    : NoticeIdentifiedField[] &size=(length - 1);
+    : b"\x00";
 };
 
 # Just for counting right now.
 type DataRow = unit(length: uint32) {
-    todo: bytes &size=length;
+    column_values: uint16;
+    todo: skip bytes &size=length - 2;
 };
 
 # Fields with a 1 byte field as documented here:
 # https://www.postgresql.org/docs/current/protocol-error-fields.html
-# TODO: Parse it out nicely or leave that up to script-land?
-type IdentifiedField = unit {
-    code: bytes &size=1; # looks better than uint8
+type ErrorIdentifiedField = unit {
+    code: uint8;
     value: bytes &until=b"\x00";
 };
 
 type ErrorResponse = unit(length: uint32) {
-    fields: IdentifiedField[] &size=(length - 1);
+    : ErrorIdentifiedField[] &size=(length - 1);
     : b"\x00";
 };
 
-# TODO (although it's unclear if we want to parse SASL all that much...)
-type Authentication = unit(length: uint32) {
-    identifier: uint32;
-    switch (self.identifier) {
-        10 -> sasl: AuthenticationSASL(length - 4) &size=(length - 4);
-        11,
-        12 -> sasl_bytes: bytes &size=(length - 4);
-        * -> not_implemented: bytes &size=(length - 4);
-    };
-};
+type AuthenticationRequest = unit(length: uint32) {
+    identifier: uint32 &requires=($$ <= 12) {
+        if (self.identifier == 0) {
+            if (length != 4) {
+                throw "AuthenticationOK with wrong length: %s" % length;
+            }
+        }
+    }
 
-type SASLMechanism = unit {
-    name: bytes &until=b"\x00";
-};
-
-type AuthenticationSASL = unit(length: uint32) {
-    mechanisms: SASLMechanism[] &size=(length - 1);
-    : b"\x00";
+    # There's more structure (GSS-API, SASL, cleartext), but for now
+    # just thread through the raw data.
+    data: bytes &eod;
 };
 
 type BackendKeyData = unit(length: uint32) {
@@ -319,9 +330,6 @@ type BackendKeyData = unit(length: uint32) {
     secret_key: uint32;
 };
 
-type NotImplemented = unit(typ: bytes, length: uint32) {
-    chunk: bytes &size=length {
-        self.typ = typ;
-    }
-    var typ: bytes;
+type NotImplemented = unit(typ: uint8, length: uint32) {
+    chunk: bytes &size=length;
 };
