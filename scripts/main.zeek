@@ -23,13 +23,20 @@ export {
 		## The connection's 4-tuple of endpoint addresses/ports.
 		id: conn_id &log;
 
+		## The user as found in the StartupMessage.
 		user: string &optional &log;
+		## The database as found in the StartupMessage.
 		database: string &optional &log;
+		## The application name as found in the StartupMessage.
 		application_name: string &optional &log;
 
+		# The command or message from the frontend.
 		frontend: string &optional &log;
+		# Arguments for the command.
 		frontend_arg: string &optional &log;
+		# The reply from the backend.
 		backend: string &optional &log;
+		# Arguments for the reply from the backend.
 		backend_arg: string &optional &log;
 
 		# Whether the login/query was successful.
@@ -44,7 +51,6 @@ export {
 		user: string &optional;
 		database: string &optional;
 		application_name: string &optional;
-		# How many data_rows have been received.
 		rows: count &default=0;
 		errors: vector of string;
 	};
@@ -54,9 +60,7 @@ export {
 
 	global finalize_postgresql: Conn::RemovalHook;
 
-	global ports: set[port] = {
-		5432/tcp,
-	} &redef;
+	global ports: set[port] = { 5432/tcp } &redef;
 }
 
 redef record connection += {
@@ -108,8 +112,10 @@ event PostgreSQL::ssl_request(c: connection) {
 event PostgreSQL::ssl_reply(c: connection, b: string) {
 	hook set_session(c);
 
-	c$postgresql$backend = b;
+	c$postgresql$backend = "ssl_reply";
+	c$postgresql$backend_arg = b;
 	c$postgresql$success = b == "S";
+
 	emit_log(c);
 }
 
