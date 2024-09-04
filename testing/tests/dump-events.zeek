@@ -1,6 +1,7 @@
-# @TEST-DOC: Test that misc/dump-events works right just with spicy-events.zeek
+# @TEST-DOC: Test that misc/dump events works.
 #
-# @TEST-EXEC: zeek -b -Cr ${TRACES}/psql-select-now.pcap ${PACKAGE}/spicy-events.zeek %INPUT >output
+# @TEST-EXEC: zeek -b -Cr ${TRACES}/psql-select-now.pcap ${PACKAGE}/spicy-events.zeek %INPUT >>output
+# @TEST-EXEC: zeek -b -Cr ${TRACES}/psql-insert-fail-drop-fail.pcap ${PACKAGE}/spicy-events.zeek %INPUT >>output
 #
 # @TEST-EXEC: btest-diff output
 
